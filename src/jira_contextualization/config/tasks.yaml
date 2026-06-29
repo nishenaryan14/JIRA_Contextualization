@@ -1,0 +1,156 @@
+# =============================================================================
+# JIRA CONTEXTUALIZATION ENGINE — TASK DEFINITIONS
+# =============================================================================
+# Tasks map to pipeline stages. Variables {csv_path}, {issue_data},
+# {extracted_knowledge}, {relationships}, {validated_knowledge} are injected
+# from Flow state at runtime.
+# =============================================================================
+
+# ─── Stage 1: Ingestion ─────────────────────────────────────────────────────
+
+ingest_and_normalize_task:
+  description: >
+    Parse the Jira CSV export and normalize all 190 tickets into structured
+    NormalizedIssue objects. The CSV has 1,646 columns with duplicate column
+    names. You must:
+
+    1. Parse ALL tickets from the CSV at: {csv_path}
+    2. Extract key fields: summary, status, priority, components, labels,
+       description, epic link, sprints, issue links, attachments
+    3. Handle duplicate column names (Component/s x3, Labels x7, Sprint x8)
+    4. Parse issue links from 100+ link columns (Blocks, Relates, Depends, etc.)
+    5. Parse attachments from semicolon-separated format
+    6. Flag any parsing errors or data quality issues
+
+    Return the complete list of normalized issues as JSON.
+  expected_output: >
+    A JSON array of all normalized Jira issues with fields: issue_key,
+    summary, issue_type, status, priority, components, labels, description,
+    epic_link, sprints, issue_links, attachments. Include a parsing_summary
+    with total_parsed, errors, and warnings.
+  agent: metadata_agent
+
+# ─── Stage 2: Knowledge Extraction ──────────────────────────────────────────
+
+extract_requirements_task:
+  description: >
+    For each normalized Jira issue, extract structured knowledge including:
+
+    1. **Business Objective**: What business goal does this ticket serve?
+    2. **Scope**: What is in scope and out of scope?
+    3. **Functional Requirements**: What must the system do?
+    4. **Non-Functional Requirements**: Performance, security, usability, etc.
+    5. **Acceptance Criteria**: Testable criteria (Given/When/Then if available)
+    6. **Business Rules**: Rules and constraints governing behavior
+    7. **Constraints**: Technical or business constraints
+    8. **Risks & Assumptions**: Identified risks and stated assumptions
+    9. **Open Questions**: Unresolved questions or ambiguities
+
+    Use the deterministic extraction results as a starting point, then apply
+    your understanding to fill gaps and identify implicit requirements.
+
+    Issues to process:
+    {issue_batch}
+  expected_output: >
+    A JSON array of StructuredIssueKnowledge objects, one per issue.
+    Each must include: issue_key, business_objective, scope,
+    functional_requirements (list), non_functional_requirements (list),
+    acceptance_criteria (list with id, description, given/when/then),
+    business_rules (list), constraints (list), risks_and_assumptions (list),
+    open_questions (list), extraction_notes (list of observations).
+  agent: requirement_agent
+
+analyze_discussions_task:
+  description: >
+    Analyze the descriptions of each Jira issue to extract:
+
+    1. **Design Decisions**: Choices made about implementation approach
+    2. **Risks**: Mentioned risks, blockers, or concerns
+    3. **Assumptions**: Stated or implicit assumptions
+    4. **Open Questions**: Unresolved items marked with (?), (!), TBD, etc.
+    5. **Design Notes**: Technical notes, architecture considerations
+
+    Focus on information that adds context beyond the formal requirements.
+
+    Issues to process:
+    {issue_batch}
+  expected_output: >
+    A JSON array with one object per issue containing: issue_key,
+    decisions (list), risks_and_assumptions (list), open_questions (list),
+    design_notes (list), discussion_summary (string).
+  agent: discussion_agent
+
+# ─── Stage 3: Relationship & Hierarchy ───────────────────────────────────────
+
+build_relationships_task:
+  description: >
+    Build the complete relationship map for the project:
+
+    1. **Epic → Story hierarchy**: Map each story to its parent epic
+    2. **Dependency graph**: Build edges from issue links (Blocks, Depends,
+       Relates, Continuation, Cloners, Fixes)
+    3. **Component groupings**: Group issues by component (Android, iOS,
+       Mobile, Cloud, ReleaseAnchorFeature)
+    4. **Identify orphans**: Stories without epic links or any connections
+    5. **Find blocked chains**: Trace blocking dependency chains
+    6. **Cross-component dependencies**: Stories that touch multiple components
+
+    Project data:
+    {project_issues}
+  expected_output: >
+    A JSON object containing:
+    - epic_hierarchy: dict mapping epic_key to list of story_keys
+    - dependency_graph: {nodes: list, edges: list of {source, target, type}}
+    - component_groups: dict mapping component_name to list of story_keys
+    - orphan_stories: list of issue_keys with no links
+    - blocked_chains: list of dependency chains
+    - cross_component: list of issue_keys touching multiple components
+  agent: dependency_agent
+
+# ─── Stage 4: Validation ────────────────────────────────────────────────────
+
+validate_knowledge_task:
+  description: >
+    Validate the completeness and quality of all extracted knowledge objects:
+
+    1. **Missing Context Detection**: Missing AC, missing priority, empty
+       descriptions, no business objective, no functional requirements
+    2. **Ambiguity Detection**: Vague language ("should", "might", "possibly"),
+       unclear scope boundaries, unmeasurable criteria
+    3. **Conflict Detection**: Contradicting requirements between related tickets
+    4. **Duplicate Detection**: Similar requirements across tickets
+    5. **Completeness Scoring**: 0.0-1.0 based on field presence and richness
+    6. **Confidence Scoring**: 0.0-1.0 based on extraction quality
+
+    Knowledge objects to validate:
+    {knowledge_objects}
+  expected_output: >
+    A JSON object containing:
+    - issue_results: list of {issue_key, completeness_score, confidence_score,
+      issues_found: list of {severity, category, message, suggestion}, is_valid}
+    - overall_quality_score: float 0.0-1.0
+    - summary: string overview of quality findings
+    - critical_issues: count
+    - warnings: count
+  agent: validation_agent
+
+# ─── Stage 5: Publishing ────────────────────────────────────────────────────
+
+publish_knowledge_task:
+  description: >
+    Generate all output artifacts from the validated knowledge base:
+
+    1. **Per-issue JSON**: One JSON file per ticket in output/knowledge_json/
+    2. **Per-issue Markdown**: Human-readable KB in output/knowledge_markdown/
+    3. **Project Knowledge JSON**: Consolidated in output/project_knowledge.json
+    4. **Relationship Graph**: In output/relationship_graph.json
+    5. **Validation Report**: In output/validation_report.md
+    6. **Executive Summary**: In output/executive_summary.md
+
+    Knowledge base data:
+    {final_knowledge}
+  expected_output: >
+    A JSON object listing all generated files with their paths and sizes.
+    Include a generation_summary with total files, total size, and any
+    issues encountered during publishing.
+  agent: publisher_agent
