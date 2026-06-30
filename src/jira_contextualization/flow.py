@@ -1,13 +1,20 @@
 """
 Jira Contextualization Flow — Orchestrates the 6-stage knowledge build pipeline.
 
-Pipeline Stages:
+Pipeline Stages (Refined Architecture):
   1. Ingest & Normalize (deterministic)
-  2. Extract Requirements (LLM - DeepSeek)
-  3. Build Relationships (deterministic + LLM)
-  4. Consolidate Knowledge (merge extracted + relationships)
-  5. Validate Knowledge (LLM - Gemini)
+  2. Extract Requirements (CrewAI — ExtractionCrew × DeepSeek Chat)
+  3. Build Relationships (deterministic)
+  4. Consolidate & Enrich (CrewAI — ConsolidationCrew × DeepSeek Reasoner)  [NEW]
+  5. Validate Knowledge (CrewAI — ValidationCrew × DeepSeek Chat)
   6. Publish Artifacts (deterministic)
+
+Changes from v1:
+  - Stages 2/4/5 now use proper @CrewBase crews instead of raw llm.call()
+  - New Stage 4 (Consolidation) for dedup + project-level enrichment
+  - Retry/backoff via llm_utils on all LLM calls
+  - All LLM calls use DeepSeek (Chat + Reasoner) to avoid Gemini quotas
+  - Caching preserved for every LLM stage (2, 4, 5)
 """
 
 from __future__ import annotations
@@ -31,7 +38,6 @@ if sys.stdout.encoding != "utf-8":
 if sys.stderr.encoding != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
-from crewai import LLM
 from crewai.flow.flow import Flow, listen, start
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -80,6 +86,12 @@ from jira_contextualization.tools.wiki_markup_parser import (
     extract_sections,
     parse_jira_markup,
 )
+from jira_contextualization.tools.llm_utils import (
+    get_deepseek_llm,
+    get_deepseek_reasoner_llm,
+    parse_llm_json,
+    safe_llm_extract,
+)
 
 load_dotenv()
 
@@ -95,6 +107,7 @@ class PipelineState(BaseModel):
     normalized_issues: list[dict] = Field(default_factory=list)
     knowledge_objects: list[dict] = Field(default_factory=list)
     relationships: dict = Field(default_factory=dict)
+    consolidation_result: dict = Field(default_factory=dict)    # NEW
     validation_results: list[dict] = Field(default_factory=list)
     quality_report: dict = Field(default_factory=dict)
     published_files: list[str] = Field(default_factory=list)
@@ -102,36 +115,39 @@ class PipelineState(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
-# ─── LLM Helpers ─────────────────────────────────────────────────────────────
+# ─── Crew-Based Extraction ──────────────────────────────────────────────────
 
 
-def get_deepseek_llm() -> LLM:
-    """Get DeepSeek LLM for extraction tasks."""
-    return LLM(
-        model="deepseek/deepseek-chat",
-        api_key=os.getenv("DEEPSEEK_API_KEY"),
-        temperature=0.1,  # Low temp for structured extraction
-        max_tokens=8000,
-    )
+def _extract_with_crew(issue: NormalizedIssue, deterministic: dict) -> dict:
+    """Use ExtractionCrew to extract knowledge from a single issue.
+
+    Falls back to safe_llm_extract if crew kickoff fails.
+    """
+    from jira_contextualization.crews.extraction_crew import ExtractionCrew
+
+    try:
+        inputs = {
+            "issue_key": issue.issue_key,
+            "summary": issue.summary,
+            "status": issue.status,
+            "priority": issue.priority,
+            "components": ", ".join(issue.components),
+            "description": issue.description[:4000],
+            "det_ac_count": str(len(deterministic.get("acceptance_criteria", []))),
+            "det_story_count": str(len(deterministic.get("user_stories", []))),
+            "det_gwt_count": str(len(deterministic.get("given_when_then", []))),
+        }
+        result = ExtractionCrew().crew().kickoff(inputs=inputs)
+        raw_text = result.raw if hasattr(result, "raw") else str(result)
+        return parse_llm_json(raw_text)
+    except Exception as e:
+        print(f"    ⚠️  Crew extraction failed for {issue.issue_key}, falling back to direct LLM: {str(e)[:100]}")
+        return _fallback_llm_extract(issue, deterministic)
 
 
-def get_gemini_llm() -> LLM:
-    """Get Gemini LLM for validation tasks."""
-    return LLM(
-        model="gemini/gemini-2.0-flash",
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        temperature=0.2,
-        max_tokens=8000,
-    )
-
-
-# ─── LLM Extraction Helpers ─────────────────────────────────────────────────
-
-
-def _llm_extract_requirements(
-    llm: LLM, issue: NormalizedIssue, deterministic: dict
-) -> dict:
-    """Use LLM to extract structured requirements from an issue."""
+def _fallback_llm_extract(issue: NormalizedIssue, deterministic: dict) -> dict:
+    """Fallback: direct LLM call with retry if crew fails."""
+    llm = get_deepseek_llm()
     prompt = f"""You are a senior business analyst. Extract structured requirements from this Jira ticket.
 
 ## Ticket: {issue.issue_key}
@@ -141,11 +157,6 @@ def _llm_extract_requirements(
 
 ## Description:
 {issue.description[:3000]}
-
-## Already Extracted (deterministic):
-- Acceptance Criteria found: {len(deterministic.get('acceptance_criteria', []))}
-- User Stories found: {len(deterministic.get('user_stories', []))}
-- Given/When/Then blocks: {len(deterministic.get('given_when_then', []))}
 
 ## Instructions:
 Return a JSON object with EXACTLY these fields:
@@ -164,45 +175,52 @@ Return a JSON object with EXACTLY these fields:
   "open_questions": ["list of unresolved questions"]
 }}
 
-IMPORTANT: Return ONLY valid JSON. No markdown, no explanation. If a field has no items, use an empty list []."""
+IMPORTANT: Return ONLY valid JSON. No markdown, no explanation."""
+
+    return safe_llm_extract(llm, prompt, fallback={
+        "business_objective": issue.summary,
+        "scope": "",
+        "functional_requirements": deterministic.get("user_stories", []),
+        "non_functional_requirements": [],
+        "acceptance_criteria": [
+            {"id": f"AC-{i+1}", "description": ac, "given": None, "when": None, "then": None, "is_testable": True}
+            for i, ac in enumerate(deterministic.get("acceptance_criteria", []))
+        ],
+        "business_rules": deterministic.get("business_rules", []),
+        "constraints": deterministic.get("constraints", []),
+        "risks_and_assumptions": [],
+        "decisions": [],
+        "open_questions": [],
+    })
+
+
+# ─── Crew-Based Validation ──────────────────────────────────────────────────
+
+
+def _validate_with_crew(knowledge: StructuredIssueKnowledge) -> dict:
+    """Use ValidationCrew to detect ambiguity and quality issues."""
+    from jira_contextualization.crews.validation_crew import ValidationCrew
 
     try:
-        response = llm.call([{"role": "user", "content": prompt}])
-        # Parse JSON from response
-        text = response if isinstance(response, str) else str(response)
-        # Strip markdown code fences if present
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-        if text.startswith("json"):
-            text = text[4:].strip()
-        return json.loads(text)
-    except Exception as e:
-        return {
-            "business_objective": issue.summary,
-            "scope": "",
-            "functional_requirements": deterministic.get("user_stories", []),
-            "non_functional_requirements": [],
-            "acceptance_criteria": [
-                {"id": f"AC-{i+1}", "description": ac, "given": None, "when": None, "then": None, "is_testable": True}
-                for i, ac in enumerate(deterministic.get("acceptance_criteria", []))
-            ],
-            "business_rules": deterministic.get("business_rules", []),
-            "constraints": deterministic.get("constraints", []),
-            "risks_and_assumptions": [],
-            "decisions": [],
-            "open_questions": [],
-            "_extraction_error": str(e),
+        inputs = {
+            "issue_key": knowledge.issue_key,
+            "summary": knowledge.summary,
+            "business_objective": knowledge.business_objective,
+            "functional_requirements": json.dumps(knowledge.functional_requirements[:5]),
+            "ac_count": str(len(knowledge.acceptance_criteria)),
+            "rule_confidence": str(round(knowledge.confidence_score, 2)),
         }
+        result = ValidationCrew().crew().kickoff(inputs=inputs)
+        raw_text = result.raw if hasattr(result, "raw") else str(result)
+        return parse_llm_json(raw_text)
+    except Exception as e:
+        print(f"    ⚠️  Crew validation failed for {knowledge.issue_key}, falling back: {str(e)[:100]}")
+        return _fallback_llm_validate(knowledge)
 
 
-def _llm_validate_knowledge(
-    llm: LLM, knowledge: StructuredIssueKnowledge
-) -> dict:
-    """Use LLM to detect ambiguity and conflicts in extracted knowledge."""
+def _fallback_llm_validate(knowledge: StructuredIssueKnowledge) -> dict:
+    """Fallback: direct LLM validation with retry."""
+    llm = get_deepseek_llm()
     prompt = f"""You are a QA specialist. Review this extracted knowledge for quality issues.
 
 ## Ticket: {knowledge.issue_key}
@@ -210,14 +228,13 @@ def _llm_validate_knowledge(
 **Business Objective**: {knowledge.business_objective}
 **Functional Requirements**: {json.dumps(knowledge.functional_requirements[:5])}
 **Acceptance Criteria**: {len(knowledge.acceptance_criteria)} items
-**Confidence Score**: {knowledge.confidence_score}
 
 ## Instructions:
 Check for:
 1. Ambiguous language ("should", "might", "possibly", "as needed")
-2. Untestable acceptance criteria (vague, no clear pass/fail)
-3. Missing critical information (no AC, no clear scope)
-4. Conflicting requirements within this ticket
+2. Untestable acceptance criteria
+3. Missing critical information
+4. Conflicting requirements
 
 Return a JSON object:
 {{
@@ -229,28 +246,95 @@ Return a JSON object:
 
 Return ONLY valid JSON."""
 
+    return safe_llm_extract(llm, prompt, fallback={
+        "issues": [],
+        "adjusted_confidence": knowledge.confidence_score,
+    })
+
+
+# ─── Consolidation ──────────────────────────────────────────────────────────
+
+
+def _run_consolidation_crew(
+    knowledge_objects: list[StructuredIssueKnowledge],
+    relationships: dict,
+) -> dict:
+    """Use ConsolidationCrew for cross-issue dedup + project enrichment."""
+    from jira_contextualization.crews.consolidation_crew import ConsolidationCrew
+
+    # Build compact summaries for context (avoid token limits)
+    summaries = []
+    for k in knowledge_objects:
+        summaries.append(
+            f"- {k.issue_key}: {k.summary} | Obj: {k.business_objective[:80]} | "
+            f"FR: {len(k.functional_requirements)} | AC: {len(k.acceptance_criteria)}"
+        )
+    issue_summaries_text = "\n".join(summaries)
+
+    epic_hierarchy = relationships.get("epic_hierarchy", {})
+    comp_groups = relationships.get("component_groups", {})
+    project_name = knowledge_objects[0].issue_key.split("-")[0] if knowledge_objects else "UNKNOWN"
+
+    inputs = {
+        "total_issues": str(len(knowledge_objects)),
+        "issue_summaries": issue_summaries_text[:12000],  # Token limit safety
+        "project_name": project_name,
+        "components": ", ".join(comp_groups.keys()),
+        "epic_count": str(len(epic_hierarchy)),
+    }
+
     try:
-        response = llm.call([{"role": "user", "content": prompt}])
-        text = response if isinstance(response, str) else str(response)
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[1] if "\n" in text else text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-        if text.startswith("json"):
-            text = text[4:].strip()
-        return json.loads(text)
-    except Exception:
-        return {"issues": [], "adjusted_confidence": knowledge.confidence_score}
+        result = ConsolidationCrew().crew().kickoff(inputs=inputs)
+        raw_text = result.raw if hasattr(result, "raw") else str(result)
+        return parse_llm_json(raw_text)
+    except Exception as e:
+        print(f"    ⚠️  Consolidation crew failed, using fallback: {str(e)[:150]}")
+        return _fallback_consolidation(knowledge_objects, relationships)
+
+
+def _fallback_consolidation(
+    knowledge_objects: list[StructuredIssueKnowledge],
+    relationships: dict,
+) -> dict:
+    """Fallback consolidation using direct LLM call."""
+    llm = get_deepseek_llm()
+    summaries = [
+        f"- {k.issue_key}: {k.summary}"
+        for k in knowledge_objects[:100]  # Limit for token safety
+    ]
+
+    prompt = f"""You are a principal architect. Analyze these {len(knowledge_objects)} Jira issues and generate project-level insights.
+
+Issues:
+{chr(10).join(summaries)}
+
+Return a JSON object:
+{{
+  "project_summary": "2-3 paragraph summary of the project",
+  "domain_groups": [{{"domain_name": "name", "description": "desc", "issue_keys": ["KEY-1"], "key_capabilities": ["cap1"]}}],
+  "key_themes": ["theme1", "theme2"],
+  "cross_cutting_concerns": ["concern1"],
+  "capability_map": {{"capability": ["KEY-1", "KEY-2"]}},
+  "duplicate_requirements": []
+}}
+
+Return ONLY valid JSON."""
+
+    return safe_llm_extract(llm, prompt, fallback={
+        "project_summary": f"Project with {len(knowledge_objects)} issues.",
+        "domain_groups": [],
+        "key_themes": [],
+        "cross_cutting_concerns": [],
+        "capability_map": {},
+        "duplicate_requirements": [],
+    })
+
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
 def _to_adjacency_list(dep_graph: dict) -> dict[str, list[str]]:
-    """Convert a full dependency graph dict to adjacency list format.
-
-    The ``build_dependency_graph`` tool returns ``{nodes, edges, blocked_chains}``.
-    ``ProjectKnowledge.dependency_graph`` expects ``{key: [related_keys]}``.
-    """
+    """Convert a full dependency graph dict to adjacency list format."""
     adj: dict[str, list[str]] = {}
     edges = dep_graph.get("edges", [])
     if isinstance(edges, list):
@@ -279,7 +363,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
 
         csv_path = self.state.csv_path
         if not csv_path or not Path(csv_path).exists():
-            # Try default path
             default = Path(__file__).parent.parent.parent / "data" / "raw"
             csv_files = list(default.glob("*.csv"))
             if csv_files:
@@ -292,10 +375,8 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         issues = parse_jira_csv(csv_path)
         print(f"  ✅ Parsed {len(issues)} tickets")
 
-        # Store as dicts for state serialization
         self.state.normalized_issues = [iss.model_dump() for iss in issues]
 
-        # Print summary
         statuses = {}
         priorities = {}
         for iss in issues:
@@ -312,15 +393,15 @@ class JiraContextualizationFlow(Flow[PipelineState]):
 
     @listen(stage_1_ingest)
     def stage_2_extract(self, _: str) -> str:
-        """Stage 2: Extract requirements using deterministic + LLM."""
+        """Stage 2: Extract requirements using ExtractionCrew + deterministic."""
         print("\n" + "=" * 70)
-        print("  STAGE 2: KNOWLEDGE EXTRACTION (DeepSeek)")
+        print("  STAGE 2: KNOWLEDGE EXTRACTION (ExtractionCrew × DeepSeek)")
         print("=" * 70)
         start_time = time.time()
 
         cache_path = Path(self.state.output_dir) / "knowledge_objects_cache.json"
         if cache_path.exists():
-            print(f"  ✨ Found cached knowledge objects at {cache_path}. Loading...")
+            print(f"  ✨ Found cached knowledge objects. Loading...")
             with open(cache_path, "r", encoding="utf-8") as f:
                 self.state.knowledge_objects = json.load(f)
             print(f"  ✅ Loaded {len(self.state.knowledge_objects)} cached knowledge objects.")
@@ -329,7 +410,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             return "extracted"
 
         issues = [NormalizedIssue(**d) for d in self.state.normalized_issues]
-        llm = get_deepseek_llm()
         knowledge_objects = []
 
         for i, issue in enumerate(issues):
@@ -338,10 +418,10 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             # Step 1: Deterministic extraction
             det_results = extract_requirements_deterministic(issue)
 
-            # Step 2: LLM-powered extraction
-            llm_results = _llm_extract_requirements(llm, issue, det_results)
+            # Step 2: Crew-based extraction (with fallback)
+            llm_results = _extract_with_crew(issue, det_results)
 
-            # Step 3: Merge deterministic + LLM results
+            # Step 3: Merge into StructuredIssueKnowledge
             ac_list = []
             llm_acs = llm_results.get("acceptance_criteria", [])
             if isinstance(llm_acs, list):
@@ -418,11 +498,10 @@ class JiraContextualizationFlow(Flow[PipelineState]):
                 ] or [],
             )
 
-            # Calculate initial scores
             knowledge.completeness_score = calculate_completeness_score(knowledge)
             knowledge.confidence_score = min(
                 1.0,
-                0.3  # base
+                0.3
                 + (0.2 if knowledge.business_objective != issue.summary else 0)
                 + (0.2 if len(knowledge.acceptance_criteria) > 0 else 0)
                 + (0.15 if len(knowledge.functional_requirements) > 0 else 0)
@@ -439,7 +518,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             json.dump(self.state.knowledge_objects, f, indent=2, ensure_ascii=False)
         print(f"  💾 Cached extracted knowledge to {cache_path}")
 
-        # Summary
         avg_conf = sum(k.confidence_score for k in knowledge_objects) / len(knowledge_objects) if knowledge_objects else 0
         avg_comp = sum(k.completeness_score for k in knowledge_objects) / len(knowledge_objects) if knowledge_objects else 0
         print(f"\n  ✅ Extracted knowledge for {len(knowledge_objects)} tickets")
@@ -460,7 +538,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
 
         issues = [NormalizedIssue(**d) for d in self.state.normalized_issues]
 
-        # Build all relationship structures
         epic_hierarchy = build_epic_hierarchy(issues)
         dep_graph = build_dependency_graph(issues)
         component_groups = group_by_component(issues)
@@ -484,10 +561,59 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         return "relationships_built"
 
     @listen(stage_3_relationships)
-    def stage_4_validate(self, _: str) -> str:
-        """Stage 4: Validate knowledge quality using rules + LLM."""
+    def stage_4_consolidate(self, _: str) -> str:
+        """Stage 4 [NEW]: Cross-issue consolidation & project enrichment."""
         print("\n" + "=" * 70)
-        print("  STAGE 4: KNOWLEDGE VALIDATION (Gemini)")
+        print("  STAGE 4: KNOWLEDGE CONSOLIDATION & ENRICHMENT (DeepSeek Reasoner)")
+        print("=" * 70)
+        start_time = time.time()
+
+        cache_path = Path(self.state.output_dir) / "consolidation_cache.json"
+        if cache_path.exists():
+            print(f"  ✨ Found cached consolidation results. Loading...")
+            with open(cache_path, "r", encoding="utf-8") as f:
+                self.state.consolidation_result = json.load(f)
+            print("  ✅ Loaded cached consolidation results.")
+            elapsed = time.time() - start_time
+            self.state.stage_timings["consolidation"] = round(elapsed, 2)
+            return "consolidated"
+
+        knowledge_objects = [
+            StructuredIssueKnowledge(**d) for d in self.state.knowledge_objects
+        ]
+
+        print(f"  🔍 Analyzing {len(knowledge_objects)} issues for cross-issue consolidation...")
+        consolidation = _run_consolidation_crew(knowledge_objects, self.state.relationships)
+
+        self.state.consolidation_result = consolidation
+
+        # Save cache
+        os.makedirs(self.state.output_dir, exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(consolidation, f, indent=2, ensure_ascii=False, default=str)
+        print(f"  💾 Cached consolidation results to {cache_path}")
+
+        # Summary
+        dupes = consolidation.get("duplicate_requirements", [])
+        domains = consolidation.get("domain_groups", [])
+        themes = consolidation.get("key_themes", [])
+        print(f"\n  ✅ Consolidation complete")
+        print(f"  📊 Duplicate pairs found: {len(dupes)}")
+        print(f"  📊 Domain groups: {len(domains)}")
+        print(f"  📊 Key themes: {len(themes)}")
+        if themes:
+            print(f"  📋 Themes: {', '.join(themes[:5])}...")
+
+        elapsed = time.time() - start_time
+        self.state.stage_timings["consolidation"] = round(elapsed, 2)
+        print(f"  ⏱️  Completed in {elapsed:.2f}s")
+        return "consolidated"
+
+    @listen(stage_4_consolidate)
+    def stage_5_validate(self, _: str) -> str:
+        """Stage 5: Validate knowledge quality using rules + ValidationCrew."""
+        print("\n" + "=" * 70)
+        print("  STAGE 5: KNOWLEDGE VALIDATION (ValidationCrew × DeepSeek)")
         print("=" * 70)
         start_time = time.time()
 
@@ -495,14 +621,12 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         rep_cache_path = Path(self.state.output_dir) / "quality_report_cache.json"
 
         if val_cache_path.exists() and rep_cache_path.exists():
-            print(f"  ✨ Found cached validation results at {val_cache_path}. Loading...")
+            print(f"  ✨ Found cached validation results. Loading...")
             with open(val_cache_path, "r", encoding="utf-8") as f:
                 self.state.validation_results = json.load(f)
             with open(rep_cache_path, "r", encoding="utf-8") as f:
                 self.state.quality_report = json.load(f)
-            
-            # Apply cached scores back to knowledge_objects
-            # Convert validation_results list to dict for lookup
+
             val_map = {res["issue_key"]: res for res in self.state.validation_results}
             for k in self.state.knowledge_objects:
                 if k["issue_key"] in val_map:
@@ -517,7 +641,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         knowledge_objects = [
             StructuredIssueKnowledge(**d) for d in self.state.knowledge_objects
         ]
-        llm = get_gemini_llm()
         all_results = []
 
         for i, knowledge in enumerate(knowledge_objects):
@@ -526,8 +649,8 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             # Step 1: Rule-based validation
             rule_result = validate_issue(knowledge)
 
-            # Step 2: LLM-based validation (ambiguity, conflicts)
-            llm_result = _llm_validate_knowledge(llm, knowledge)
+            # Step 2: Crew-based validation (ambiguity, conflicts)
+            llm_result = _validate_with_crew(knowledge)
 
             # Merge LLM issues into rule results
             llm_issues = llm_result.get("issues", [])
@@ -542,7 +665,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
                             suggestion=iss.get("suggestion"),
                         ))
 
-            # Adjust confidence from LLM
             adjusted = llm_result.get("adjusted_confidence")
             if adjusted and isinstance(adjusted, (int, float)):
                 rule_result.confidence_score = (
@@ -554,12 +676,10 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             )
             all_results.append(rule_result)
 
-        # Generate quality report
         report = generate_quality_report(all_results)
         self.state.validation_results = [r.model_dump() for r in all_results]
         self.state.quality_report = report.model_dump()
 
-        # Update knowledge objects with final scores
         for knowledge_dict, result in zip(self.state.knowledge_objects, all_results):
             knowledge_dict["completeness_score"] = result.completeness_score
             knowledge_dict["confidence_score"] = result.confidence_score
@@ -570,7 +690,7 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             json.dump(self.state.validation_results, f, indent=2, ensure_ascii=False)
         with open(rep_cache_path, "w", encoding="utf-8") as f:
             json.dump(self.state.quality_report, f, indent=2, ensure_ascii=False)
-        print(f"  💾 Cached validation results to {val_cache_path} and {rep_cache_path}")
+        print(f"  💾 Cached validation results")
 
         print(f"\n  ✅ Validated {len(all_results)} tickets")
         print(f"  📊 Overall Quality: {report.overall_quality_score:.2f}")
@@ -581,11 +701,11 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         print(f"  ⏱️  Completed in {elapsed:.2f}s")
         return "validated"
 
-    @listen(stage_4_validate)
-    def stage_5_publish(self, _: str) -> str:
-        """Stage 5: Publish all output artifacts."""
+    @listen(stage_5_validate)
+    def stage_6_publish(self, _: str) -> str:
+        """Stage 6: Publish all output artifacts."""
         print("\n" + "=" * 70)
-        print("  STAGE 5: KNOWLEDGE PUBLISHING")
+        print("  STAGE 6: KNOWLEDGE PUBLISHING")
         print("=" * 70)
         start_time = time.time()
 
@@ -595,6 +715,7 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         ]
         issues = [NormalizedIssue(**d) for d in self.state.normalized_issues]
         report = QualityReport(**self.state.quality_report)
+        consolidation = self.state.consolidation_result
         published = []
 
         # 1. Per-issue JSON
@@ -619,8 +740,14 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         published.append(graph_path)
         print("  ✅ Published relationship_graph.json")
 
-        # 4. Consolidated project knowledge
-        # Build epic summaries
+        # 4. Consolidation report (NEW)
+        consol_path = str(output_dir / "consolidation_report.json")
+        with open(consol_path, "w", encoding="utf-8") as f:
+            json.dump(consolidation, f, indent=2, ensure_ascii=False, default=str)
+        published.append(consol_path)
+        print("  ✅ Published consolidation_report.json")
+
+        # 5. Consolidated project knowledge
         epic_hierarchy = self.state.relationships.get("epic_hierarchy", {})
         epic_summaries = []
         for epic_key, story_keys in epic_hierarchy.items():
@@ -643,7 +770,6 @@ class JiraContextualizationFlow(Flow[PipelineState]):
                 avg_confidence=round(avg_conf, 2),
             ))
 
-        # Build component summaries
         comp_groups = self.state.relationships.get("component_groups", {})
         comp_summaries = []
         for comp_name, story_keys in comp_groups.items():
@@ -659,19 +785,12 @@ class JiraContextualizationFlow(Flow[PipelineState]):
                 epics=list(comp_epics),
             ))
 
-        # Quality metrics
         avg_conf = sum(k.confidence_score for k in knowledge_objects) / len(knowledge_objects) if knowledge_objects else 0
         avg_comp = sum(k.completeness_score for k in knowledge_objects) / len(knowledge_objects) if knowledge_objects else 0
         issues_with_ac = sum(1 for k in knowledge_objects if len(k.acceptance_criteria) > 0)
-        issues_missing_priority = sum(
-            1 for i in issues if i.priority == "Unspecified"
-        )
-        issues_with_links = sum(
-            1 for i in issues if len(i.issue_links) > 0
-        )
-        issues_missing_desc = sum(
-            1 for i in issues if not i.description.strip()
-        )
+        issues_missing_priority = sum(1 for i in issues if i.priority == "Unspecified")
+        issues_with_links = sum(1 for i in issues if len(i.issue_links) > 0)
+        issues_missing_desc = sum(1 for i in issues if not i.description.strip())
 
         grade = "A" if avg_conf >= 0.8 else "B" if avg_conf >= 0.6 else "C" if avg_conf >= 0.4 else "D"
 
@@ -695,10 +814,12 @@ class JiraContextualizationFlow(Flow[PipelineState]):
             ),
             dependency_graph=_to_adjacency_list(self.state.relationships.get("dependency_graph", {})),
             metadata={
-                "pipeline_version": "1.0.0",
+                "pipeline_version": "2.0.0",
                 "extraction_llm": "deepseek/deepseek-chat",
-                "validation_llm": "gemini/gemini-2.0-flash",
+                "consolidation_llm": "deepseek/deepseek-reasoner",
+                "validation_llm": "deepseek/deepseek-chat",
                 "stage_timings": json.dumps(self.state.stage_timings),
+                "project_summary": consolidation.get("project_summary", consolidation.get("enrichment", {}).get("project_summary", "")),
             },
         )
 
@@ -706,7 +827,7 @@ class JiraContextualizationFlow(Flow[PipelineState]):
         published.extend(paths.values())
         print("  ✅ Published project_knowledge.json + executive_summary.md")
 
-        # 5. Validation report
+        # 6. Validation report
         report_path = publish_validation_report(report, str(output_dir))
         published.append(report_path)
         print("  ✅ Published validation_report.md")
@@ -719,10 +840,16 @@ class JiraContextualizationFlow(Flow[PipelineState]):
 
         # Final summary
         print("\n" + "=" * 70)
-        print("  🎉 PIPELINE COMPLETE")
+        print("  🎉 PIPELINE COMPLETE (v2.0 — Refined Architecture)")
         print("=" * 70)
         print(f"  📁 Total files published: {len(published)}")
         print(f"  📊 Quality Grade: {grade} (Avg Confidence: {avg_conf:.2f})")
         print(f"  ⏱️  Total time: {sum(self.state.stage_timings.values()):.2f}s")
         print(f"  📂 Output directory: {output_dir.absolute()}")
+        print()
+        print("  Cache files (delete to re-run LLM stages):")
+        print(f"    • {output_dir / 'knowledge_objects_cache.json'}")
+        print(f"    • {output_dir / 'consolidation_cache.json'}")
+        print(f"    • {output_dir / 'validation_results_cache.json'}")
+        print(f"    • {output_dir / 'quality_report_cache.json'}")
         return "done"

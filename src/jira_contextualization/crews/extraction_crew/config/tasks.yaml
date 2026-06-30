@@ -1,0 +1,53 @@
+extract_requirements:
+  description: >
+    Extract structured requirements from this Jira ticket.
+
+    **Ticket**: {issue_key}
+    **Summary**: {summary}
+    **Status**: {status} | **Priority**: {priority}
+    **Components**: {components}
+
+    **Description**:
+    {description}
+
+    **Already Extracted (deterministic)**:
+    - Acceptance Criteria found: {det_ac_count}
+    - User Stories found: {det_story_count}
+    - Given/When/Then blocks: {det_gwt_count}
+
+    Extract:
+    1. Business Objective: one sentence describing the business goal
+    2. Scope: what is in/out of scope
+    3. Functional Requirements: what the system must do
+    4. Non-Functional Requirements: performance, security, usability
+    5. Acceptance Criteria: with Given/When/Then structure where possible
+    6. Business Rules: governing behavior rules
+    7. Constraints: technical or business limitations
+  expected_output: >
+    A structured JSON with: business_objective (string), scope (string),
+    functional_requirements (list[str]), non_functional_requirements (list[str]),
+    acceptance_criteria (list of objects with id, description, given, when, then, is_testable),
+    business_rules (list[str]), constraints (list[str]).
+  agent: requirement_extractor
+
+analyze_discussions:
+  description: >
+    Analyze this Jira ticket to extract context beyond formal requirements.
+
+    **Ticket**: {issue_key}
+    **Summary**: {summary}
+    **Description**:
+    {description}
+
+    Extract:
+    1. Risks & Assumptions: mentioned or implied risks and assumptions
+    2. Decisions: design or implementation choices mentioned
+    3. Open Questions: unresolved items (TBD, ?, needs discussion)
+    4. Design Notes: technical notes or architecture considerations
+  expected_output: >
+    A structured JSON with: risks_and_assumptions (list[str]),
+    decisions (list[str]), open_questions (list[str]),
+    design_notes (list[str]).
+  agent: discussion_analyzer
+  context:
+    - extract_requirements

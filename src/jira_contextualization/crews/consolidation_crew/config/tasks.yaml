@@ -1,0 +1,47 @@
+detect_duplicates:
+  description: >
+    Analyze the following requirement summaries from {total_issues} issues
+    to detect duplicate or near-duplicate requirements.
+
+    **Issue summaries**:
+    {issue_summaries}
+
+    For each pair of duplicates found, provide:
+    - The two issue keys
+    - The duplicate requirements
+    - Why they are duplicates
+    - The recommended canonical form
+
+    Be strict: only flag true duplicates where the same requirement
+    is stated in two places, not merely related requirements.
+  expected_output: >
+    A JSON list of duplicate pairs. Each pair has: issue_key_a, issue_key_b,
+    requirement_a, requirement_b, similarity_reason, recommended_canonical.
+    If no duplicates found, return an empty list.
+  agent: consolidation_agent
+
+enrich_project_knowledge:
+  description: >
+    Based on all {total_issues} issues and the analysis so far, generate
+    project-level enrichment:
+
+    **Project**: {project_name}
+    **Issue summaries**:
+    {issue_summaries}
+    **Components**: {components}
+    **Epic hierarchy**: {epic_count} epics
+
+    Generate:
+    1. A comprehensive project summary (2-3 paragraphs)
+    2. Domain groups: logical modules/domains with their issue keys
+    3. Key themes: 5-10 major themes across all issues
+    4. Cross-cutting concerns: NFRs/concerns spanning multiple issues
+    5. Capability map: business capability -> [issue_keys]
+  expected_output: >
+    A JSON object with: project_summary (string), domain_groups (list of
+    {domain_name, description, issue_keys, key_capabilities}),
+    key_themes (list[str]), cross_cutting_concerns (list[str]),
+    capability_map (dict mapping capability name to list of issue keys).
+  agent: consolidation_agent
+  context:
+    - detect_duplicates

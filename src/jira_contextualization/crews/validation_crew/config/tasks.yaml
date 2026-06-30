@@ -1,0 +1,24 @@
+validate_knowledge:
+  description: >
+    Validate the quality of extracted knowledge for this ticket.
+
+    **Ticket**: {issue_key}
+    **Summary**: {summary}
+    **Business Objective**: {business_objective}
+    **Functional Requirements**: {functional_requirements}
+    **Acceptance Criteria Count**: {ac_count}
+    **Confidence Score (rule-based)**: {rule_confidence}
+
+    Check for:
+    1. Ambiguous language (should, might, possibly, as needed, etc.)
+    2. Untestable acceptance criteria (vague, no clear pass/fail)
+    3. Missing critical information (no AC, no clear scope)
+    4. Conflicting requirements within this ticket
+    5. Incomplete business objective
+
+    Return validation findings and an adjusted confidence score.
+  expected_output: >
+    A JSON object with: issues (list of objects with severity
+    [critical/warning/info], category, message, suggestion) and
+    adjusted_confidence (float 0.0-1.0).
+  agent: validation_agent

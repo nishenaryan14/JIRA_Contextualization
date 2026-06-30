@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Phase 1 — JIRA Contextualization Pipeline Architecture (Offline)</title>
+<title>Phase 1 — JIRA Contextualization Pipeline Architecture v2.0 (Offline)</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,7 +15,7 @@
   .page-title .sub { font-size: 13px; color: #666; font-weight: 400; margin-top: 3px; font-style: italic; }
 
   /* ── Stage Columns ── */
-  .stages-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 6px; }
+  .stages-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 6px; }
   .stage-col { display: flex; flex-direction: column; }
 
   .stage-header-bar {
@@ -35,6 +35,7 @@
   .bg-green { background: #2e7d32; }
   .bg-purple { background: #6a1b9a; }
   .bg-teal { background: #00695c; }
+  .bg-indigo { background: #283593; }
 
   /* ── Inner content boxes ── */
   .stage-body { border: 2px dashed #c0c8d8; border-radius: 8px; padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 8px; background: #fafbfe; }
@@ -80,7 +81,7 @@
   .arrow-between svg { width: 18px; height: 18px; }
 
   /* ── Left Data Source Panel ── */
-  .full-layout { display: grid; grid-template-columns: 130px 1fr 170px; gap: 12px; }
+  .full-layout { display: grid; grid-template-columns: 120px 1fr 155px; gap: 10px; }
   .left-col, .right-col { display: flex; flex-direction: column; gap: 10px; }
 
   .side-panel { border: 1.5px solid; border-radius: 8px; padding: 10px 10px; }
@@ -91,7 +92,7 @@
   .jira-logo svg { width: 50px; height: 22px; }
 
   /* ── LLM Summary Bar ── */
-  .llm-summary { display: grid; grid-template-columns: repeat(5, 1fr) 1.2fr; gap: 8px; margin-top: 14px; }
+  .llm-summary { display: grid; grid-template-columns: repeat(6, 1fr) 1.2fr; gap: 6px; margin-top: 14px; }
   .llm-cell { border: 1px solid #ddd; border-radius: 6px; padding: 8px 8px; background: #fafafa; }
   .llm-cell .cell-title { font-size: 9px; font-weight: 800; color: #555; text-transform: uppercase; margin-bottom: 4px; }
   .llm-cell .cell-row { font-size: 9px; color: #555; padding: 1px 0; }
@@ -154,8 +155,8 @@
 
 <!-- ═══ TITLE ═══ -->
 <div class="page-title">
-  <h1>Phase 1 – JIRA Project Knowledge Build Architecture (Offline)</h1>
-  <div class="sub">From Raw JIRA Data to High Quality, Validated & Reusable Project Knowledge Base · CrewAI Pipeline</div>
+  <h1>Phase 1 – JIRA Project Knowledge Build Architecture v2.0</h1>
+  <div class="sub">From Raw JIRA Data to High Quality, Validated & Reusable Project Knowledge Base · CrewAI Pipeline · 6-Stage Architecture</div>
 </div>
 
 <!-- ═══ MAIN LAYOUT: LEFT DATA SOURCE | STAGES | RIGHT PANELS ═══ -->
@@ -197,7 +198,7 @@
     </div>
   </div>
 
-  <!-- ─── CENTER: 5 Stage Columns ─── -->
+  <!-- ─── CENTER: 6 Stage Columns ─── -->
   <div style="display:flex; gap:0;">
 
     <!-- STAGE 1 -->
@@ -251,48 +252,41 @@
 
     <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#1565c0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
-    <!-- STAGE 2 -->
+    <!-- STAGE 2: ExtractionCrew -->
     <div class="stage-wrapper">
       <div class="stage-header-bar bg-orange">
         <div class="stage-num-circle">2</div>
-        <div><div class="title">Knowledge Extraction<br>Engine</div><div class="mode">(LLM + Rules Hybrid)</div></div>
+        <div><div class="title">Knowledge Extraction<br>Engine</div><div class="mode">(ExtractionCrew × DeepSeek)</div></div>
       </div>
       <div class="stage-body">
         <div class="inner-box llm-highlight">
-          <div class="inner-box-title"><span class="icon">🤖</span> LLM Task Group 1<span class="llm-tag">LLM</span></div>
-          <ul>
-            <li>Requirement Extractor</li>
-            <li>Acceptance Criteria Extractor</li>
-            <li>Business Rule Extractor</li>
-          </ul>
-        </div>
-        <div class="inner-box llm-highlight">
-          <div class="inner-box-title"><span class="icon">🤖</span> LLM Task Group 2<span class="llm-tag">LLM</span></div>
-          <ul>
-            <li>Risk & Assumption Extractor</li>
-            <li>Constraint Extractor</li>
-            <li>Open Question Extractor</li>
-            <li>Decision Extractor</li>
-          </ul>
-        </div>
-        <div class="inner-box llm-highlight">
-          <div class="inner-box-title"><span class="icon">🤖</span> LLM Task Group 3<span class="llm-tag">LLM</span></div>
+          <div class="inner-box-title"><span class="icon">🤖</span> RequirementExtractor Agent<span class="llm-tag">CrewAI</span></div>
           <ul>
             <li>Business Objective Inference</li>
-            <li>Scope Definition</li>
-            <li>NFR Extraction</li>
+            <li>Functional & Non-Functional Reqs</li>
+            <li>Acceptance Criteria (GWT)</li>
+            <li>Business Rules & Constraints</li>
+          </ul>
+        </div>
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> DiscussionAnalyzer Agent<span class="llm-tag">CrewAI</span></div>
+          <ul>
+            <li>Risk & Assumption Extractor</li>
+            <li>Design Decision Miner</li>
+            <li>Open Question Detector</li>
+            <li>Design Notes Collector</li>
           </ul>
         </div>
         <div class="inner-box det-box">
-          <div class="inner-box-title"><span class="icon">⚙️</span> Deterministic Components<span class="det-tag">Rules</span></div>
+          <div class="inner-box-title"><span class="icon">⚙️</span> Deterministic Pre-Extract<span class="det-tag">Rules</span></div>
           <ul>
-            <li>Regex-based AC/GWT matcher</li>
+            <li>Regex AC/GWT matcher</li>
             <li>User Story pattern detector</li>
             <li>Section splitter (h2/h3)</li>
-            <li>Merge Strategy: Det → LLM → Combine</li>
+            <li>Merge: Det → Crew → Combine</li>
           </ul>
         </div>
-        <div class="output-pill">📦 Structured Issue<br>Knowledge (Per Issue JSON)</div>
+        <div class="output-pill">📦 Structured Issue<br>Knowledge (Per Issue)</div>
       </div>
     </div>
 
@@ -345,41 +339,68 @@
 
     <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#2e7d32" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
-    <!-- STAGE 4 -->
+    <!-- STAGE 4: ConsolidationCrew [NEW] -->
+    <div class="stage-wrapper">
+      <div class="stage-header-bar bg-indigo">
+        <div class="stage-num-circle">4</div>
+        <div><div class="title">Knowledge Consolidation<br>& Enrichment</div><div class="mode">(ConsolidationCrew × DeepSeek Reasoner)</div></div>
+      </div>
+      <div class="stage-body">
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> Duplicate Detector<span class="llm-tag">CrewAI</span></div>
+          <ul>
+            <li>Cross-issue requirement dedup</li>
+            <li>Canonical form selection</li>
+            <li>Similarity reasoning</li>
+          </ul>
+        </div>
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> Project Enrichment<span class="llm-tag">CrewAI</span></div>
+          <ul>
+            <li>Project summary generation</li>
+            <li>Domain grouping & clustering</li>
+            <li>Key themes identification</li>
+            <li>Cross-cutting concern detection</li>
+            <li>Business capability mapping</li>
+          </ul>
+        </div>
+        <div class="output-pill">📦 Consolidated Knowledge<br>+ Project Enrichment</div>
+      </div>
+    </div>
+
+    <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#283593" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+    <!-- STAGE 5: ValidationCrew -->
     <div class="stage-wrapper">
       <div class="stage-header-bar bg-purple">
-        <div class="stage-num-circle">4</div>
-        <div><div class="title">Knowledge Validation<br>Engine</div><div class="mode">(Rules + LLM Hybrid)</div></div>
+        <div class="stage-num-circle">5</div>
+        <div><div class="title">Knowledge Validation<br>Engine</div><div class="mode">(ValidationCrew × DeepSeek)</div></div>
       </div>
       <div class="stage-body">
         <div class="inner-box">
           <div class="inner-box-title"><span class="icon">✅</span> Rule-Based Validations<span class="det-tag">Rules</span></div>
           <ul>
             <li>Missing AC detection (critical)</li>
-            <li>Missing Summary/Description</li>
             <li>Missing Priority (warning)</li>
-            <li>Invalid / Orphan links</li>
-            <li>Empty Stories / Tasks</li>
+            <li>Empty Description (critical)</li>
+            <li>Orphan links (info)</li>
             <li>No business objective (warning)</li>
-            <li>No functional reqs (warning)</li>
           </ul>
         </div>
         <div class="inner-box llm-highlight">
-          <div class="inner-box-title"><span class="icon">🤖</span> LLM Based Validations<span class="llm-tag">LLM</span></div>
+          <div class="inner-box-title"><span class="icon">🤖</span> ValidationAgent<span class="llm-tag">CrewAI</span></div>
           <ul>
             <li>Ambiguity Detection</li>
             <li>Conflict Identification</li>
-            <li>Requirement Completeness</li>
-            <li>Logical Consistency Check</li>
-            <li>Confidence Scoring</li>
+            <li>Completeness Assessment</li>
+            <li>Confidence Score Adjustment</li>
           </ul>
         </div>
         <div class="inner-box det-box">
-          <div class="inner-box-title"><span class="icon">📊</span> Completeness Scoring</div>
+          <div class="inner-box-title"><span class="icon">📊</span> Score Merge</div>
           <ul>
-            <li>11 weighted field checks</li>
-            <li>Score: 0.6×rule + 0.4×LLM</li>
-            <li>Quality grade assignment</li>
+            <li>0.6×rule + 0.4×LLM</li>
+            <li>Quality grade (A–D)</li>
           </ul>
         </div>
         <div class="output-pill">📦 Validated Knowledge<br>(With Confidence Score)</div>
@@ -388,10 +409,10 @@
 
     <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#6a1b9a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
-    <!-- STAGE 5 -->
+    <!-- STAGE 6 -->
     <div class="stage-wrapper">
       <div class="stage-header-bar bg-teal">
-        <div class="stage-num-circle">5</div>
+        <div class="stage-num-circle">6</div>
         <div><div class="title">Knowledge<br>Publisher</div><div class="mode">(No LLM)</div></div>
       </div>
       <div class="stage-body">
@@ -407,9 +428,10 @@
         <div class="inner-box">
           <div class="inner-box-title"><span class="icon">🗂️</span> Consolidated Publisher</div>
           <ul>
-            <li>Project Knowledge JSON (1.1 MB)</li>
+            <li>Project Knowledge JSON</li>
             <li>Executive Summary MD</li>
             <li>Relationship Graph JSON</li>
+            <li>Consolidation Report JSON</li>
             <li>Epic & Component summaries</li>
           </ul>
         </div>
@@ -417,9 +439,9 @@
           <div class="inner-box-title"><span class="icon">💾</span> Caching Layer</div>
           <ul>
             <li>knowledge_objects_cache.json</li>
+            <li>consolidation_cache.json</li>
             <li>validation_results_cache.json</li>
             <li>quality_report_cache.json</li>
-            <li>Skip LLM calls on restart</li>
           </ul>
         </div>
         <div class="output-pill">📦 Knowledge Artifacts<br>& Indexes (384 files)</div>
@@ -458,8 +480,8 @@
     <div class="side-panel" style="border-color:#e65100; background:#fff8f0;">
       <h4 style="color:#e65100;">🔄 LLM Models Used</h4>
       <ul>
-        <li>🧠 DeepSeek Chat<br><span style="font-size:8px;color:#888">&nbsp;&nbsp;&nbsp;&nbsp;(Extraction)</span></li>
-        <li>🧠 Gemini 2.0 Flash<br><span style="font-size:8px;color:#888">&nbsp;&nbsp;&nbsp;&nbsp;(Validation)</span></li>
+        <li>🧠 DeepSeek Chat<br><span style="font-size:8px;color:#888">&nbsp;&nbsp;&nbsp;&nbsp;(Extraction + Validation)</span></li>
+        <li>🧠 DeepSeek Reasoner<br><span style="font-size:8px;color:#888">&nbsp;&nbsp;&nbsp;&nbsp;(Consolidation)</span></li>
       </ul>
     </div>
 
@@ -506,46 +528,52 @@
 </div>
 
 <!-- ═══ LLM INVOLVEMENT SUMMARY ═══ -->
-<div class="llm-summary-title">LLM Involvement Summary</div>
+<div class="llm-summary-title">LLM Involvement Summary (v2.0 — 6-Stage Pipeline)</div>
 <div class="llm-summary">
   <div class="llm-cell">
     <div class="cell-title">Stage 1 · Ingestion</div>
     <div class="cell-row">LLM USED? <span class="no">✘ No</span></div>
-    <div class="cell-row">TYPE: <strong>N/A</strong></div>
-    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: All deterministic — CSV parsing, field mapping, normalization & validation</div>
+    <div class="cell-row">CREW: <strong>None</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Deterministic CSV parsing, normalization & validation</div>
   </div>
   <div class="llm-cell" style="border-color:#ffcc80; background:#fffaf5;">
     <div class="cell-title">Stage 2 · Extraction</div>
-    <div class="cell-row">LLM USED? <span class="yes">✔ Yes (Selective)</span></div>
-    <div class="cell-row">TYPE: <strong>DeepSeek Chat</strong></div>
-    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Semantic understanding, requirement extraction & summarization</div>
+    <div class="cell-row">LLM USED? <span class="yes">✔ ExtractionCrew</span></div>
+    <div class="cell-row">MODEL: <strong>DeepSeek Chat</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">2 Agents: RequirementExtractor + DiscussionAnalyzer</div>
   </div>
   <div class="llm-cell">
     <div class="cell-title">Stage 3 · Relationships</div>
     <div class="cell-row">LLM USED? <span class="no">✘ No</span></div>
-    <div class="cell-row">TYPE: <strong>N/A</strong></div>
-    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Deterministic graph building, hierarchy construction & clustering</div>
+    <div class="cell-row">CREW: <strong>None</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Deterministic graph building & clustering</div>
+  </div>
+  <div class="llm-cell" style="border-color:#7986cb; background:#f5f6ff;">
+    <div class="cell-title">Stage 4 · Consolidation</div>
+    <div class="cell-row">LLM USED? <span class="yes">✔ ConsolidationCrew</span></div>
+    <div class="cell-row">MODEL: <strong>DeepSeek Reasoner</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">1 Agent: Cross-issue dedup + project enrichment</div>
   </div>
   <div class="llm-cell" style="border-color:#ce93d8; background:#fdf5ff;">
-    <div class="cell-title">Stage 4 · Validation</div>
-    <div class="cell-row">LLM USED? <span class="yes">✔ Yes (Selective)</span></div>
-    <div class="cell-row">TYPE: <strong>Gemini 2.0 Flash</strong></div>
-    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Deep validation, ambiguity & consistency reasoning</div>
+    <div class="cell-title">Stage 5 · Validation</div>
+    <div class="cell-row">LLM USED? <span class="yes">✔ ValidationCrew</span></div>
+    <div class="cell-row">MODEL: <strong>DeepSeek Chat</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">1 Agent: Ambiguity, conflict & quality validation</div>
   </div>
   <div class="llm-cell">
-    <div class="cell-title">Stage 5 · Publisher</div>
+    <div class="cell-title">Stage 6 · Publisher</div>
     <div class="cell-row">LLM USED? <span class="no">✘ No</span></div>
-    <div class="cell-row">TYPE: <strong>N/A</strong></div>
+    <div class="cell-row">CREW: <strong>None</strong></div>
     <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Artifact generation, serialization & caching</div>
   </div>
   <div class="llm-cell" style="border-color:#1565c0; background:#f5f8ff;">
     <div class="cell-title" style="color:#1565c0;">Overall LLM Strategy</div>
     <ul style="list-style:none; font-size:8px; color:#555;">
-      <li style="padding:1px 0;">✔ Use LLM only for semantic understanding or reasoning</li>
-      <li style="padding:1px 0;">✔ Batch similar extraction tasks to reduce cost</li>
-      <li style="padding:1px 0;">✔ Rules & deterministic logic for structure & parsing</li>
-      <li style="padding:1px 0;">✔ Cache LLM outputs to disk for fast restarts</li>
-      <li style="padding:1px 0;">✔ Designed for scalability & cost efficiency</li>
+      <li style="padding:1px 0;">✔ 3 CrewAI crews with @CrewBase + YAML configs</li>
+      <li style="padding:1px 0;">✔ Retry/backoff on all LLM calls (429/500/503)</li>
+      <li style="padding:1px 0;">✔ Rules & deterministic for structure & parsing</li>
+      <li style="padding:1px 0;">✔ 4 cache files for fast pipeline restarts</li>
+      <li style="padding:1px 0;">✔ All DeepSeek (no Gemini quota issues)</li>
     </ul>
   </div>
 </div>
@@ -592,7 +620,7 @@
 </div>
 
 <!-- ═══ CROSS CUTTING CAPABILITIES ═══ -->
-<div class="cc-bar-title">6. Cross Cutting Capabilities</div>
+<div class="cc-bar-title">Cross Cutting Capabilities</div>
 <div class="cross-cutting">
   <div class="cc-cell">
     <div class="cc-icon">🔒</div>
@@ -607,17 +635,17 @@
   <div class="cc-cell">
     <div class="cc-icon">📊</div>
     <div class="cc-title">Evaluation Framework</div>
-    <div class="cc-desc">Context Quality, Completeness Scoring, Confidence</div>
+    <div class="cc-desc">Context Quality, Completeness, Confidence Scoring</div>
   </div>
   <div class="cc-cell">
     <div class="cc-icon">💾</div>
-    <div class="cc-title">Caching Layer</div>
-    <div class="cc-desc">LLM Response Cache, Extraction Cache, Validation Cache</div>
+    <div class="cc-title">4-Layer Cache</div>
+    <div class="cc-desc">Extraction, Consolidation, Validation, Quality Report</div>
   </div>
   <div class="cc-cell">
     <div class="cc-icon">🤖</div>
-    <div class="cc-title">LLM & Model Management</div>
-    <div class="cc-desc">DeepSeek + Gemini, LiteLLM Routing, Prompt Management</div>
+    <div class="cc-title">CrewAI + LLM Mgmt</div>
+    <div class="cc-desc">3 @CrewBase Crews, DeepSeek Chat + Reasoner, Retry/Backoff</div>
   </div>
   <div class="cc-cell">
     <div class="cc-icon">🔄</div>
@@ -640,12 +668,12 @@
 <div style="margin-top:10px; padding:10px 14px; background:#fffde7; border:1px solid #fff9c4; border-radius:6px;">
   <div style="font-size:10px; font-weight:800; color:#f57f17; margin-bottom:4px;">📌 NOTES</div>
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
-    <div style="font-size:9px; color:#666;">• Pipeline runs as batch offline — processes full CSV export in one pass</div>
-    <div style="font-size:9px; color:#666;">• All outputs are versioned with generation timestamps & provenance</div>
-    <div style="font-size:9px; color:#666;">• LLM calls cached to JSON — restarts skip expensive API calls instantly</div>
-    <div style="font-size:9px; color:#666;">• Designed to scale for large projects (thousands of issues)</div>
-    <div style="font-size:9px; color:#666;">• Hybrid approach: 3 of 5 stages are fully deterministic (no LLM cost)</div>
-    <div style="font-size:9px; color:#666;">• Reusable across multiple downstream workflows (test gen, reporting)</div>
+    <div style="font-size:9px; color:#666;">• v2.0: 6-stage pipeline with 3 @CrewBase crews + 3 deterministic stages</div>
+    <div style="font-size:9px; color:#666;">• All LLM calls use DeepSeek (Chat + Reasoner) — no Gemini quota issues</div>
+    <div style="font-size:9px; color:#666;">• 4 cache files (extraction, consolidation, validation, quality) — fast restarts</div>
+    <div style="font-size:9px; color:#666;">• Exponential backoff retry on 429/500/503 for all LLM calls</div>
+    <div style="font-size:9px; color:#666;">• NEW Stage 4: Cross-issue consolidation with DeepSeek Reasoner for deep reasoning</div>
+    <div style="font-size:9px; color:#666;">• Proper CrewAI agents replace raw llm.call() — tool use, memory, structured output</div>
   </div>
 </div>
 

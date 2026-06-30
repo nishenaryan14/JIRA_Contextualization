@@ -6,8 +6,22 @@ Modules
 - :mod:`structured_knowledge`— AI-enriched per-issue knowledge.
 - :mod:`project_knowledge`   — Project-wide aggregations and roll-ups.
 - :mod:`validation_report`   — Quality findings and reports.
+- :mod:`extraction`          — Per-issue extraction crew outputs.
+- :mod:`consolidation`       — Cross-issue consolidation stage outputs.
 """
 
+from jira_contextualization.models.consolidation import (
+    ConsolidationResult,
+    DomainGroup,
+    DuplicateRequirement,
+    ProjectEnrichment,
+)
+from jira_contextualization.models.extraction import (
+    DiscussionExtractionResult,
+    ExtractedAcceptanceCriterion,
+    MergedExtractionResult,
+    RequirementExtractionResult,
+)
 from jira_contextualization.models.normalized_issue import (
     Attachment,
     IssueLink,
@@ -52,4 +66,15 @@ __all__ = [
     "IssueValidationResult",
     "QualityReport",
     "ValidationIssue",
+    # extraction
+    "DiscussionExtractionResult",
+    "ExtractedAcceptanceCriterion",
+    "MergedExtractionResult",
+    "RequirementExtractionResult",
+    # consolidation
+    "ConsolidationResult",
+    "DomainGroup",
+    "DuplicateRequirement",
+    "ProjectEnrichment",
 ]
+
