@@ -3,920 +3,650 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JIRA Contextualization — CrewAI Pipeline Architecture</title>
+<title>Phase 1 — JIRA Contextualization Pipeline Architecture (Offline)</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #fff; color: #1a1a2e; padding: 24px 28px; min-width: 1500px; }
 
-  body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #ffffff;
-    color: #1a1a2e;
-    padding: 30px 40px;
-    min-width: 1400px;
-  }
+  /* ── Title ── */
+  .page-title { text-align: center; margin-bottom: 18px; }
+  .page-title h1 { font-size: 24px; font-weight: 900; color: #111; letter-spacing: 1px; text-transform: uppercase; }
+  .page-title .sub { font-size: 13px; color: #666; font-weight: 400; margin-top: 3px; font-style: italic; }
 
-  /* ── Title ─────────────────────────────────── */
-  .title-block {
-    text-align: center;
-    margin-bottom: 28px;
-  }
-  .title-block h1 {
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    color: #1a1a2e;
-  }
-  .title-block .subtitle {
-    font-size: 14px;
-    color: #5a5a7a;
-    margin-top: 4px;
-    font-weight: 400;
-  }
+  /* ── Stage Columns ── */
+  .stages-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 6px; }
+  .stage-col { display: flex; flex-direction: column; }
 
-  /* ── Layout Grid ───────────────────────────── */
-  .main-grid {
-    display: grid;
-    grid-template-columns: 140px 1fr 220px;
-    gap: 16px;
+  .stage-header-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: 8px; color: #fff; margin-bottom: 8px;
   }
-  .center-column {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+  .stage-num-circle {
+    width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 14px; flex-shrink: 0;
   }
+  .stage-header-bar .title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.3; }
+  .stage-header-bar .mode { font-size: 9px; font-weight: 500; opacity: 0.85; }
 
-  /* ── Stage Box ─────────────────────────────── */
-  .stage-box {
-    border: 2px dashed #c0c0d0;
-    border-radius: 12px;
-    padding: 18px 20px 16px;
-    position: relative;
-    background: #fafbff;
+  .bg-blue { background: #1565c0; }
+  .bg-orange { background: #e65100; }
+  .bg-green { background: #2e7d32; }
+  .bg-purple { background: #6a1b9a; }
+  .bg-teal { background: #00695c; }
+
+  /* ── Inner content boxes ── */
+  .stage-body { border: 2px dashed #c0c8d8; border-radius: 8px; padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 8px; background: #fafbfe; }
+  .inner-box { border: 1px solid #dde2ec; border-radius: 6px; padding: 8px 10px; background: #fff; }
+  .inner-box-title {
+    font-size: 10px; font-weight: 800; color: #333; margin-bottom: 5px;
+    display: flex; align-items: center; gap: 5px; text-transform: uppercase; letter-spacing: 0.3px;
   }
-  .stage-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
+  .inner-box-title .icon { font-size: 14px; }
+  .inner-box ul { list-style: none; }
+  .inner-box ul li { font-size: 9.5px; color: #444; padding: 1.5px 0; line-height: 1.4; display: flex; align-items: flex-start; gap: 4px; }
+  .inner-box ul li::before { content: "•"; color: #999; font-weight: bold; flex-shrink: 0; }
+
+  .llm-highlight { border-color: #ffcc80 !important; background: #fffaf0 !important; }
+  .llm-tag {
+    display: inline-flex; align-items: center; gap: 2px;
+    background: #fff3e0; border: 1px solid #ffb74d; color: #e65100;
+    font-size: 8px; font-weight: 800; padding: 1px 6px; border-radius: 8px;
+    text-transform: uppercase; margin-left: auto;
   }
-  .stage-num {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    font-size: 16px;
-    color: #fff;
-    flex-shrink: 0;
-  }
-  .stage-title {
-    font-size: 15px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .stage-subtitle {
-    font-size: 11px;
-    font-weight: 500;
-    color: #777;
-    margin-left: 4px;
+  .det-tag {
+    display: inline-flex; align-items: center; gap: 2px;
+    background: #e8f5e9; border: 1px solid #81c784; color: #2e7d32;
+    font-size: 8px; font-weight: 800; padding: 1px 6px; border-radius: 8px;
+    text-transform: uppercase; margin-left: auto;
   }
 
-  /* ── Sub-boxes inside stages ───────────────── */
-  .sub-grid {
-    display: grid;
-    gap: 12px;
-  }
-  .sub-grid.cols-2 { grid-template-columns: 1fr 1fr; }
-  .sub-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-  .sub-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-  .sub-grid.cols-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
-  .sub-grid.cols-6 { grid-template-columns: repeat(6, 1fr); }
+  /* ── Deterministic Components sub-box ── */
+  .det-box { border-color: #a5d6a7 !important; background: #f0faf0 !important; }
 
-  .sub-box {
-    border: 1px solid #d8dce6;
-    border-radius: 8px;
-    padding: 12px 14px;
-    background: #fff;
-  }
-  .sub-box-header {
-    font-size: 12px;
-    font-weight: 700;
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .sub-box ul {
-    list-style: none;
-    padding: 0;
-  }
-  .sub-box ul li {
-    font-size: 11px;
-    color: #444;
-    padding: 2px 0;
-    display: flex;
-    align-items: flex-start;
-    gap: 5px;
-    line-height: 1.4;
-  }
-  .sub-box ul li::before {
-    content: "•";
-    color: #888;
-    font-weight: bold;
-    flex-shrink: 0;
+  /* ── Green Output Pill ── */
+  .output-pill {
+    background: #e8f5e9; border: 1.5px solid #66bb6a; border-radius: 20px;
+    padding: 6px 14px; text-align: center; margin-top: auto;
+    font-size: 10px; font-weight: 700; color: #2e7d32;
   }
 
-  /* ── LLM Badge ─────────────────────────────── */
-  .llm-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    background: #fff3e0;
-    border: 1px solid #ffb74d;
-    color: #e65100;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 10px;
-    text-transform: uppercase;
-  }
-  .no-llm-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    background: #e8f5e9;
-    border: 1px solid #81c784;
-    color: #2e7d32;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 10px;
-    text-transform: uppercase;
-  }
+  /* ── Flow Arrows between columns ── */
+  .arrow-col { display: flex; align-items: center; justify-content: center; padding: 0 2px; }
+  .stages-with-arrows { display: flex; gap: 0; margin-bottom: 6px; }
+  .stage-wrapper { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .arrow-between { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding-top: 36px; }
+  .arrow-between svg { width: 18px; height: 18px; }
 
-  /* ── Output Box (green) ────────────────────── */
-  .output-box {
-    background: #e8f5e9;
-    border: 1px solid #a5d6a7;
-    border-radius: 8px;
-    padding: 8px 14px;
-    margin-top: 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .output-box .icon { font-size: 16px; }
-  .output-box .label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #2e7d32;
-  }
+  /* ── Left Data Source Panel ── */
+  .full-layout { display: grid; grid-template-columns: 130px 1fr 170px; gap: 12px; }
+  .left-col, .right-col { display: flex; flex-direction: column; gap: 10px; }
 
-  /* ── Flow Arrow ────────────────────────────── */
-  .flow-arrow {
-    display: flex;
-    justify-content: center;
-    padding: 2px 0;
-  }
-  .flow-arrow svg {
-    width: 24px;
-    height: 28px;
-  }
+  .side-panel { border: 1.5px solid; border-radius: 8px; padding: 10px 10px; }
+  .side-panel h4 { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .side-panel ul { list-style: none; }
+  .side-panel ul li { font-size: 9.5px; color: #444; padding: 2px 0; display: flex; align-items: center; gap: 4px; line-height: 1.3; }
+  .jira-logo { display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .jira-logo svg { width: 50px; height: 22px; }
 
-  /* ── Side Panels ───────────────────────────── */
-  .side-panel {
-    border: 2px solid;
-    border-radius: 10px;
-    padding: 14px 14px;
-    margin-bottom: 14px;
-  }
-  .side-panel h3 {
-    font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 10px;
-  }
-  .side-panel ul {
-    list-style: none;
-    padding: 0;
-  }
-  .side-panel ul li {
-    font-size: 11px;
-    color: #444;
-    padding: 3px 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    line-height: 1.4;
-  }
-  .check { color: #2e7d32; font-weight: bold; }
-  .cross { color: #c62828; font-weight: bold; }
+  /* ── LLM Summary Bar ── */
+  .llm-summary { display: grid; grid-template-columns: repeat(5, 1fr) 1.2fr; gap: 8px; margin-top: 14px; }
+  .llm-cell { border: 1px solid #ddd; border-radius: 6px; padding: 8px 8px; background: #fafafa; }
+  .llm-cell .cell-title { font-size: 9px; font-weight: 800; color: #555; text-transform: uppercase; margin-bottom: 4px; }
+  .llm-cell .cell-row { font-size: 9px; color: #555; padding: 1px 0; }
+  .llm-cell .cell-row strong { color: #222; }
+  .llm-cell .cell-row .yes { color: #2e7d32; font-weight: 700; }
+  .llm-cell .cell-row .no { color: #c62828; font-weight: 700; }
+  .llm-summary-title { font-size: 12px; font-weight: 900; color: #1565c0; text-transform: uppercase; text-align: center; margin-bottom: 8px; letter-spacing: 1px; }
 
-  /* ── Color Themes ──────────────────────────── */
-  .theme-blue .stage-num { background: #1565c0; }
-  .theme-blue .stage-title { color: #1565c0; }
-  .theme-blue .stage-box { border-color: #90caf9; }
+  /* ── Knowledge Store Section ── */
+  .knowledge-store { margin-top: 14px; border: 2px solid #1565c0; border-radius: 8px; padding: 14px 16px; background: #f5f8ff; }
+  .knowledge-store h3 { font-size: 12px; font-weight: 900; color: #1565c0; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .store-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .store-cell { border: 1px solid #bbdefb; border-radius: 6px; padding: 8px 10px; background: #fff; }
+  .store-cell h5 { font-size: 10px; font-weight: 800; color: #1565c0; margin-bottom: 4px; }
+  .store-cell p { font-size: 9px; color: #555; margin-bottom: 2px; }
+  .store-cell ul { list-style: none; }
+  .store-cell ul li { font-size: 9px; color: #555; padding: 1px 0; }
+  .store-cell ul li::before { content: "• "; color: #1565c0; font-weight: bold; }
 
-  .theme-orange .stage-num { background: #e65100; }
-  .theme-orange .stage-title { color: #e65100; }
-  .theme-orange .stage-box { border-color: #ffcc80; }
+  /* ── Bottom bar sections ── */
+  .bottom-sections { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 14px; }
+  .bottom-box { border: 1.5px solid; border-radius: 8px; padding: 10px 12px; }
+  .bottom-box h4 { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .bottom-box ul { list-style: none; }
+  .bottom-box ul li { font-size: 9px; color: #444; padding: 2px 0; display: flex; align-items: center; gap: 4px; }
 
-  .theme-green .stage-num { background: #2e7d32; }
-  .theme-green .stage-title { color: #2e7d32; }
-  .theme-green .stage-box { border-color: #a5d6a7; }
+  /* ── Cross Cutting Bar ── */
+  .cross-cutting { margin-top: 14px; display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .cc-cell { border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px 8px; background: #fafafa; text-align: center; }
+  .cc-cell .cc-icon { font-size: 18px; margin-bottom: 3px; }
+  .cc-cell .cc-title { font-size: 9px; font-weight: 800; color: #333; text-transform: uppercase; }
+  .cc-cell .cc-desc { font-size: 8px; color: #777; margin-top: 2px; }
+  .cc-bar-title { font-size: 11px; font-weight: 900; color: #333; text-transform: uppercase; letter-spacing: 1px; text-align: center; margin-bottom: 8px; margin-top: 14px; }
 
-  .theme-purple .stage-num { background: #6a1b9a; }
-  .theme-purple .stage-title { color: #6a1b9a; }
-  .theme-purple .stage-box { border-color: #ce93d8; }
+  /* ── Legend ── */
+  .legend { margin-top: 12px; display: flex; gap: 20px; justify-content: center; align-items: center; padding: 8px 16px; background: #f5f5f5; border-radius: 6px; border: 1px solid #e0e0e0; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 9px; color: #555; }
+  .legend-swatch { width: 16px; height: 12px; border-radius: 3px; border: 1px solid #ccc; }
 
-  .theme-teal .stage-num { background: #00695c; }
-  .theme-teal .stage-title { color: #00695c; }
-  .theme-teal .stage-box { border-color: #80cbc4; }
+  /* ── Metric value ── */
+  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .metric-item { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-bottom: 1px solid #eee; }
+  .metric-item:last-child { border-bottom: none; }
+  .metric-label { font-size: 9px; color: #555; }
+  .metric-val { font-size: 10px; font-weight: 800; }
+  .grade-a { color: #2e7d32; }
 
-  /* ── Bottom Summary Bar ────────────────────── */
-  .bottom-bar {
-    margin-top: 20px;
-    border: 2px solid #1565c0;
-    border-radius: 10px;
-    padding: 16px 20px;
-    background: #e3f2fd;
-  }
-  .bottom-bar h3 {
-    font-size: 13px;
-    font-weight: 800;
-    color: #1565c0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 12px;
-    text-align: center;
-  }
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 10px;
-  }
-  .summary-cell {
-    background: #fff;
-    border: 1px solid #bbdefb;
-    border-radius: 8px;
-    padding: 10px 12px;
-    text-align: center;
-  }
-  .summary-cell .s-stage {
-    font-size: 11px;
-    font-weight: 700;
-    color: #1565c0;
-    margin-bottom: 6px;
-  }
-  .summary-cell .s-llm {
-    font-size: 10px;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-  .summary-cell .s-type {
-    font-size: 10px;
-    color: #666;
-  }
-  .summary-cell .s-purpose {
-    font-size: 9px;
-    color: #888;
-    margin-top: 4px;
-    line-height: 1.3;
-  }
+  .check-list li::before { content: "✔ " !important; color: #2e7d32 !important; }
+  .cross-list li::before { content: "✘ " !important; color: #c62828 !important; }
 
-  /* ── Data Source Panel ─────────────────────── */
-  .data-source {
-    border-color: #1565c0;
-    background: #f5f8ff;
-  }
-  .data-source h3 { color: #1565c0; }
-
-  /* ── Quality Panel ─────────────────────────── */
-  .quality-panel {
-    border-color: #2e7d32;
-    background: #f5fff5;
-  }
-  .quality-panel h3 { color: #2e7d32; }
-  .metric-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 5px 0;
-    border-bottom: 1px solid #e0e0e0;
-  }
-  .metric-row:last-child { border-bottom: none; }
-  .metric-label { font-size: 11px; color: #444; }
-  .metric-value { font-size: 12px; font-weight: 700; }
-  .metric-value.grade-a { color: #2e7d32; }
-
-  /* ── Tech Stack Panel ──────────────────────── */
-  .tech-panel {
-    border-color: #6a1b9a;
-    background: #fdf5ff;
-  }
-  .tech-panel h3 { color: #6a1b9a; }
-
-  /* ── Output Artifacts Panel ────────────────── */
-  .output-panel {
-    border-color: #00695c;
-    background: #f0faf8;
-  }
-  .output-panel h3 { color: #00695c; }
-
-  /* ── Legend ─────────────────────────────────── */
-  .legend-bar {
-    margin-top: 16px;
-    display: flex;
-    gap: 24px;
-    justify-content: center;
-    align-items: center;
-    padding: 10px 20px;
-    background: #f5f5f5;
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: #555;
-  }
-  .legend-icon {
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-  }
-
-  /* ── Notes ──────────────────────────────────── */
-  .notes-bar {
-    margin-top: 12px;
-    padding: 12px 16px;
-    background: #fffde7;
-    border: 1px solid #fff9c4;
-    border-radius: 8px;
-  }
-  .notes-bar h4 {
-    font-size: 11px;
-    font-weight: 700;
-    color: #f57f17;
-    margin-bottom: 6px;
-  }
-  .notes-bar ul { list-style: none; }
-  .notes-bar ul li {
-    font-size: 10px;
-    color: #666;
-    padding: 2px 0;
-  }
-  .notes-bar ul li::before {
-    content: "• ";
-    color: #f57f17;
-    font-weight: bold;
-  }
-
-  .icon-circle {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    flex-shrink: 0;
-  }
-
-  .left-panel { display: flex; flex-direction: column; gap: 14px; }
-  .right-panel { display: flex; flex-direction: column; gap: 14px; }
-
-  .code-font { font-family: 'Courier New', monospace; font-size: 10px; color: #555; }
+  /* Structured Knowledge Object */
+  .sko-bar { margin-top: 6px; border: 2px solid #2e7d32; border-radius: 8px; padding: 12px 16px; background: #f0faf0; }
+  .sko-bar h3 { font-size: 11px; font-weight: 900; color: #2e7d32; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .sko-fields { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .sko-field { font-size: 9px; color: #333; display: flex; align-items: center; gap: 3px; padding: 3px 6px; background: #fff; border-radius: 4px; border: 1px solid #c8e6c9; }
+  .sko-field .dot { width: 6px; height: 6px; border-radius: 50%; background: #66bb6a; flex-shrink: 0; }
 </style>
 </head>
 <body>
 
-<!-- ═══════════ TITLE ═══════════ -->
-<div class="title-block">
-  <h1>JIRA CONTEXTUALIZATION ENGINE — CrewAI Pipeline Architecture</h1>
-  <div class="subtitle">From Raw Jira CSV Data to High-Quality, Validated & Reusable Structured Knowledge Base · Phase 1 (Offline Build)</div>
+<!-- ═══ TITLE ═══ -->
+<div class="page-title">
+  <h1>Phase 1 – JIRA Project Knowledge Build Architecture (Offline)</h1>
+  <div class="sub">From Raw JIRA Data to High Quality, Validated & Reusable Project Knowledge Base · CrewAI Pipeline</div>
 </div>
 
-<!-- ═══════════ MAIN 3-COLUMN GRID ═══════════ -->
-<div class="main-grid">
+<!-- ═══ MAIN LAYOUT: LEFT DATA SOURCE | STAGES | RIGHT PANELS ═══ -->
+<div class="full-layout">
 
-  <!-- ─── LEFT PANEL ─── -->
-  <div class="left-panel">
-
-    <div class="side-panel data-source">
-      <h3>📋 Data Source</h3>
-      <div style="text-align:center; margin-bottom:8px;">
-        <svg width="60" height="28" viewBox="0 0 60 28"><rect x="0" y="0" width="60" height="28" rx="4" fill="#0052CC"/><text x="30" y="18" text-anchor="middle" fill="#fff" font-size="12" font-weight="700" font-family="Inter">Jira</text></svg>
+  <!-- ─── LEFT: Data Source ─── -->
+  <div class="left-col">
+    <div class="side-panel" style="border-color:#1565c0; background:#f5f8ff;">
+      <h4 style="color:#1565c0;">📋 Jira Project<br>Data Source</h4>
+      <div class="jira-logo">
+        <svg viewBox="0 0 50 22"><rect width="50" height="22" rx="4" fill="#0052CC"/><text x="25" y="15" text-anchor="middle" fill="#fff" font-size="11" font-weight="700" font-family="Inter">Jira</text></svg>
       </div>
       <ul>
-        <li>📁 HP Jira CSV Export</li>
-        <li>📊 1,646 Columns</li>
-        <li>📝 190 Issues (Stories)</li>
-        <li>🔗 Issue Links (12 types)</li>
-        <li>📎 Attachments (14 cols)</li>
-        <li>🏷️ Labels × 7 repeating</li>
-        <li>🔄 Sprints × 8 repeating</li>
-        <li>🧩 Components × 3</li>
-        <li>📋 Custom Fields</li>
-        <li>📝 Wiki Markup Descriptions</li>
+        <li>📁 Epics</li>
+        <li>📝 Stories</li>
+        <li>📋 Tasks / Sub-Tasks</li>
+        <li>🐛 Bugs</li>
+        <li>💬 Comments</li>
+        <li>📎 Attachments</li>
+        <li>🏷️ Custom Fields<br>&nbsp;&nbsp;&nbsp;(1646 Fields)</li>
+        <li>🔗 Issue Links</li>
       </ul>
+      <div style="margin-top:8px; padding-top:6px; border-top:1px solid #ccc;">
+        <ul>
+          <li style="font-size:8px;">📥 CSV Export<br>(Batch Offline)</li>
+        </ul>
+      </div>
     </div>
 
     <div class="side-panel" style="border-color:#e65100; background:#fff8f0;">
-      <h3 style="color:#e65100;">👥 Human Reviewers</h3>
+      <h4 style="color:#e65100;">👥 Human Reviewers</h4>
       <ul>
         <li>👤 BA / QA</li>
         <li>👤 Product Owner</li>
         <li>👤 SME</li>
         <li>👤 Test Lead</li>
       </ul>
-      <div style="margin-top:8px; font-size:10px; color:#888; text-align:center; border-top:1px solid #eee; padding-top:6px;">
-        Review &amp; Feedback →<br>Knowledge Store
-      </div>
-    </div>
-
-    <div class="side-panel tech-panel">
-      <h3>🛠️ Tech Stack</h3>
-      <ul>
-        <li>🐍 Python 3.12</li>
-        <li>🤖 CrewAI Framework</li>
-        <li>📦 Pydantic v2 Models</li>
-        <li>📁 UV Package Manager</li>
-        <li>🔧 LiteLLM Routing</li>
-      </ul>
+      <div style="margin-top:6px; font-size:8px; color:#999; text-align:center; border-top:1px solid #eee; padding-top:5px;">Review &amp; Feedback</div>
     </div>
   </div>
 
-  <!-- ─── CENTER COLUMN (Pipeline) ─── -->
-  <div class="center-column">
+  <!-- ─── CENTER: 5 Stage Columns ─── -->
+  <div style="display:flex; gap:0;">
 
-    <!-- ════ STAGE 1 ════ -->
-    <div class="stage-box theme-blue">
-      <div class="stage-header">
-        <div class="stage-num">1</div>
-        <div>
-          <span class="stage-title">Ingestion & Normalization</span>
-          <span class="no-llm-badge">No LLM</span>
-        </div>
+    <!-- STAGE 1 -->
+    <div class="stage-wrapper">
+      <div class="stage-header-bar bg-blue">
+        <div class="stage-num-circle">1</div>
+        <div><div class="title">Ingestion &<br>Normalization</div><div class="mode">(No LLM)</div></div>
       </div>
-      <div class="sub-grid cols-3">
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e3f2fd;">📂</span>
-            CSV Parser (Index-Based)
-          </div>
+      <div class="stage-body">
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">📂</span> CSV Parser<span class="det-tag">Rules</span></div>
           <ul>
             <li>Parse 1,646-column wide CSV</li>
             <li>Index-based column mapping</li>
-            <li>Handle duplicate headers</li>
-            <li><span class="code-font">csv.field_size_limit(10MB)</span></li>
-            <li>UTF-8 encoding with emoji support</li>
+            <li>Duplicate header handling</li>
+            <li>10MB field size limit (Windows)</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e3f2fd;">🔧</span>
-            Field Mapper & Normalizer
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">🔧</span> Field Mapper & Normalizer</div>
           <ul>
-            <li>Map 58–167: Issue Links (12 types)</li>
-            <li>Map 168–181: Attachments</li>
-            <li>Map 22–24: Components</li>
-            <li>Map 26–32: Labels</li>
+            <li>Cols 58–167: Issue Links (12 types)</li>
+            <li>Cols 168–181: Attachments</li>
+            <li>Cols 22–24: Components × 3</li>
+            <li>Cols 26–32: Labels × 7</li>
             <li>Sprint × 8 deduplication</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e3f2fd;">📝</span>
-            Wiki Markup Parser
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">📝</span> Wiki Markup Parser</div>
           <ul>
-            <li>h1./h2./h3. heading extraction</li>
-            <li>Bullet & numbered list parsing</li>
-            <li>Given/When/Then detection</li>
-            <li>!image! & [link|url] extraction</li>
-            <li>{code} block handling</li>
+            <li>h1./h2./h3. headings</li>
+            <li>Bullet & numbered lists</li>
+            <li>Given/When/Then blocks</li>
+            <li>!image! & [link|url]</li>
+            <li>{code} block extraction</li>
           </ul>
         </div>
-      </div>
-      <div class="output-box">
-        <span class="icon">📦</span>
-        <span class="label">Normalized Issue Objects (JSON) — 190 issues with 25+ structured fields each</span>
-      </div>
-    </div>
-
-    <div class="flow-arrow">
-      <svg viewBox="0 0 24 28"><path d="M12 0 L12 20 M6 16 L12 24 L18 16" stroke="#1565c0" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-
-    <!-- ════ STAGE 2 ════ -->
-    <div class="stage-box theme-orange">
-      <div class="stage-header">
-        <div class="stage-num">2</div>
-        <div>
-          <span class="stage-title">Knowledge Extraction Engine</span>
-          <span class="stage-subtitle">(LLM + Rules Hybrid)</span>
-          <span class="llm-badge">🧠 DeepSeek Chat</span>
-        </div>
-      </div>
-      <div class="sub-grid cols-2">
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#fff3e0;">⚙️</span>
-            Deterministic Extractors
-          </div>
+        <div class="inner-box det-box">
+          <div class="inner-box-title"><span class="icon">✅</span> Data Cleaner & Validator</div>
           <ul>
-            <li>Requirement Extractor (regex patterns)</li>
-            <li>AC / GWT Pattern Matcher</li>
-            <li>User Story Detector ("As a… I want…")</li>
-            <li>Business Rule Section Parser</li>
-            <li>Constraint & Limitation Finder</li>
-            <li>Description Section Splitter (h2/h3)</li>
+            <li>UTF-8 encoding (emoji safe)</li>
+            <li>Attachment entry parsing</li>
+            <li>Empty field normalization</li>
+            <li>Pydantic v2 validation</li>
           </ul>
         </div>
-        <div class="sub-box" style="border-color:#ffcc80;">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#fff3e0;">🤖</span>
-            LLM Extraction (DeepSeek)
-            <span class="llm-badge">LLM</span>
-          </div>
+        <div class="output-pill">📦 Normalized Issue<br>Objects (JSON)</div>
+      </div>
+    </div>
+
+    <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#1565c0" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+    <!-- STAGE 2 -->
+    <div class="stage-wrapper">
+      <div class="stage-header-bar bg-orange">
+        <div class="stage-num-circle">2</div>
+        <div><div class="title">Knowledge Extraction<br>Engine</div><div class="mode">(LLM + Rules Hybrid)</div></div>
+      </div>
+      <div class="stage-body">
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> LLM Task Group 1<span class="llm-tag">LLM</span></div>
           <ul>
-            <li>Business Objective inference</li>
-            <li>Functional Requirements extraction</li>
-            <li>Non-Functional Requirements</li>
-            <li>Acceptance Criteria (structured GWT)</li>
-            <li>Business Rules & Constraints</li>
-            <li>Risks, Assumptions & Open Questions</li>
-            <li>Decisions & Design Notes</li>
-            <li>Scope definition</li>
+            <li>Requirement Extractor</li>
+            <li>Acceptance Criteria Extractor</li>
+            <li>Business Rule Extractor</li>
           </ul>
         </div>
-      </div>
-      <div style="margin-top:10px; padding:8px 12px; background:#fff8e1; border:1px solid #ffe082; border-radius:6px; font-size:10px; color:#795548;">
-        <strong>Merge Strategy:</strong> Deterministic results provide base extraction → LLM enriches with semantic understanding → Combined into <code>StructuredIssueKnowledge</code> per issue
-      </div>
-      <div class="output-box">
-        <span class="icon">📦</span>
-        <span class="label">Structured Issue Knowledge (Per Issue JSON) — Business objectives, requirements, AC, risks for all 190 issues</span>
-      </div>
-    </div>
-
-    <div class="flow-arrow">
-      <svg viewBox="0 0 24 28"><path d="M12 0 L12 20 M6 16 L12 24 L18 16" stroke="#e65100" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-
-    <!-- ════ STAGE 3 ════ -->
-    <div class="stage-box theme-green">
-      <div class="stage-header">
-        <div class="stage-num">3</div>
-        <div>
-          <span class="stage-title">Relationship & Hierarchy Engine</span>
-          <span class="stage-subtitle">(Deterministic)</span>
-          <span class="no-llm-badge">No LLM</span>
-        </div>
-      </div>
-      <div class="sub-grid cols-4">
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e8f5e9;">🏗️</span>
-            Epic Hierarchy Builder
-          </div>
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> LLM Task Group 2<span class="llm-tag">LLM</span></div>
           <ul>
-            <li>Epic → Story mapping</li>
-            <li>Parent/Child relationships</li>
+            <li>Risk & Assumption Extractor</li>
+            <li>Constraint Extractor</li>
+            <li>Open Question Extractor</li>
+            <li>Decision Extractor</li>
+          </ul>
+        </div>
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> LLM Task Group 3<span class="llm-tag">LLM</span></div>
+          <ul>
+            <li>Business Objective Inference</li>
+            <li>Scope Definition</li>
+            <li>NFR Extraction</li>
+          </ul>
+        </div>
+        <div class="inner-box det-box">
+          <div class="inner-box-title"><span class="icon">⚙️</span> Deterministic Components<span class="det-tag">Rules</span></div>
+          <ul>
+            <li>Regex-based AC/GWT matcher</li>
+            <li>User Story pattern detector</li>
+            <li>Section splitter (h2/h3)</li>
+            <li>Merge Strategy: Det → LLM → Combine</li>
+          </ul>
+        </div>
+        <div class="output-pill">📦 Structured Issue<br>Knowledge (Per Issue JSON)</div>
+      </div>
+    </div>
+
+    <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#e65100" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+    <!-- STAGE 3 -->
+    <div class="stage-wrapper">
+      <div class="stage-header-bar bg-green">
+        <div class="stage-num-circle">3</div>
+        <div><div class="title">Relationship &<br>Hierarchy Engine</div><div class="mode">(Deterministic)</div></div>
+      </div>
+      <div class="stage-body">
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">🏗️</span> Epic Hierarchy Builder<span class="det-tag">Rules</span></div>
+          <ul>
+            <li>Epic → Story → Sub-Task tree</li>
+            <li>Parent/Child mapping</li>
             <li>56 Epics resolved</li>
             <li>166 stories linked to epics</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e8f5e9;">🔗</span>
-            Dependency Graph Builder
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">🔗</span> Dependency Graph Builder<span class="det-tag">Rules</span></div>
           <ul>
-            <li>Blocks / Blocked-by edges</li>
-            <li>Depends / Relates edges</li>
-            <li>Cloners / Continuation links</li>
+            <li>Build directed edge graph</li>
+            <li>Blocks / Depends / Relates</li>
+            <li>Cloners / Continuation</li>
             <li>Blocked chain detection</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e8f5e9;">🧩</span>
-            Component Grouper
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">🧩</span> Component Grouper</div>
           <ul>
             <li>6 components mapped</li>
-            <li>Android (101 issues)</li>
-            <li>iOS (79 issues)</li>
-            <li>Mobile (183 issues)</li>
+            <li>Android: 101 | iOS: 79</li>
+            <li>Mobile: 183 | Cloud: 2</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e8f5e9;">🔍</span>
-            Related Cluster Finder
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">🔍</span> Related Cluster Finder</div>
           <ul>
-            <li>Union-find algorithm</li>
-            <li>Group related issues</li>
+            <li>Union-find grouping</li>
             <li>Cross-link discovery</li>
             <li>160 issues with links</li>
           </ul>
         </div>
-      </div>
-      <div class="output-box">
-        <span class="icon">📦</span>
-        <span class="label">Project Relationship Graph & Hierarchy — Adjacency lists, epic maps, component groups, blocked chains</span>
+        <div class="output-pill">📦 Project Relationship<br>Graph & Hierarchy</div>
       </div>
     </div>
 
-    <div class="flow-arrow">
-      <svg viewBox="0 0 24 28"><path d="M12 0 L12 20 M6 16 L12 24 L18 16" stroke="#2e7d32" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
+    <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#2e7d32" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
-    <!-- ════ STAGE 4 ════ -->
-    <div class="stage-box theme-purple">
-      <div class="stage-header">
-        <div class="stage-num">4</div>
-        <div>
-          <span class="stage-title">Knowledge Validation Engine</span>
-          <span class="stage-subtitle">(Rules + LLM Hybrid)</span>
-          <span class="llm-badge">🧠 Gemini 2.0 Flash</span>
-        </div>
+    <!-- STAGE 4 -->
+    <div class="stage-wrapper">
+      <div class="stage-header-bar bg-purple">
+        <div class="stage-num-circle">4</div>
+        <div><div class="title">Knowledge Validation<br>Engine</div><div class="mode">(Rules + LLM Hybrid)</div></div>
       </div>
-      <div class="sub-grid cols-2">
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#f3e5f5;">✅</span>
-            Rule-Based Validations
-          </div>
+      <div class="stage-body">
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">✅</span> Rule-Based Validations<span class="det-tag">Rules</span></div>
           <ul>
-            <li>Missing Acceptance Criteria (critical)</li>
-            <li>Empty description check (critical)</li>
-            <li>Missing priority → "Unspecified" (warning)</li>
-            <li>No functional requirements (warning)</li>
+            <li>Missing AC detection (critical)</li>
+            <li>Missing Summary/Description</li>
+            <li>Missing Priority (warning)</li>
+            <li>Invalid / Orphan links</li>
+            <li>Empty Stories / Tasks</li>
             <li>No business objective (warning)</li>
-            <li>Orphan story — no epic/links (info)</li>
-            <li>Missing components (info)</li>
-            <li>Completeness scoring (11 weighted fields)</li>
+            <li>No functional reqs (warning)</li>
           </ul>
         </div>
-        <div class="sub-box" style="border-color:#ce93d8;">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#f3e5f5;">🤖</span>
-            LLM Validation (Gemini)
-            <span class="llm-badge">LLM</span>
-          </div>
+        <div class="inner-box llm-highlight">
+          <div class="inner-box-title"><span class="icon">🤖</span> LLM Based Validations<span class="llm-tag">LLM</span></div>
           <ul>
-            <li>Ambiguity detection in requirements</li>
-            <li>Conflict identification across fields</li>
-            <li>Requirement completeness assessment</li>
-            <li>Logical consistency check</li>
-            <li>Confidence score adjustment (0.6×rule + 0.4×llm)</li>
-            <li>Validation issue generation with suggestions</li>
+            <li>Ambiguity Detection</li>
+            <li>Conflict Identification</li>
+            <li>Requirement Completeness</li>
+            <li>Logical Consistency Check</li>
+            <li>Confidence Scoring</li>
           </ul>
         </div>
-      </div>
-      <div class="output-box">
-        <span class="icon">📦</span>
-        <span class="label">Validated Knowledge (Quality Grade A) — 0 critical, 0 warnings, 194 info findings across 190 issues</span>
+        <div class="inner-box det-box">
+          <div class="inner-box-title"><span class="icon">📊</span> Completeness Scoring</div>
+          <ul>
+            <li>11 weighted field checks</li>
+            <li>Score: 0.6×rule + 0.4×LLM</li>
+            <li>Quality grade assignment</li>
+          </ul>
+        </div>
+        <div class="output-pill">📦 Validated Knowledge<br>(With Confidence Score)</div>
       </div>
     </div>
 
-    <div class="flow-arrow">
-      <svg viewBox="0 0 24 28"><path d="M12 0 L12 20 M6 16 L12 24 L18 16" stroke="#6a1b9a" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
+    <div class="arrow-between"><svg viewBox="0 0 18 18"><path d="M2 9 L12 9 M9 5 L15 9 L9 13" stroke="#6a1b9a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
 
-    <!-- ════ STAGE 5 ════ -->
-    <div class="stage-box theme-teal">
-      <div class="stage-header">
-        <div class="stage-num">5</div>
-        <div>
-          <span class="stage-title">Knowledge Publisher</span>
-          <span class="stage-subtitle">(Deterministic)</span>
-          <span class="no-llm-badge">No LLM</span>
-        </div>
+    <!-- STAGE 5 -->
+    <div class="stage-wrapper">
+      <div class="stage-header-bar bg-teal">
+        <div class="stage-num-circle">5</div>
+        <div><div class="title">Knowledge<br>Publisher</div><div class="mode">(No LLM)</div></div>
       </div>
-      <div class="sub-grid cols-3">
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e0f2f1;">📄</span>
-            Format Generators
-          </div>
+      <div class="stage-body">
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">📄</span> Format Generator</div>
           <ul>
-            <li>Per-issue JSON (190 files)</li>
-            <li>Per-issue Markdown (190 files)</li>
-            <li>Executive Summary (MD)</li>
+            <li>JSON Generator (per-issue)</li>
+            <li>Markdown Generator (per-issue)</li>
+            <li>Summary Report Generator</li>
             <li>Validation Report (MD + tables)</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e0f2f1;">🗂️</span>
-            Consolidated Outputs
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">🗂️</span> Consolidated Publisher</div>
           <ul>
             <li>Project Knowledge JSON (1.1 MB)</li>
+            <li>Executive Summary MD</li>
             <li>Relationship Graph JSON</li>
             <li>Epic & Component summaries</li>
-            <li>Quality metrics aggregation</li>
           </ul>
         </div>
-        <div class="sub-box">
-          <div class="sub-box-header">
-            <span class="icon-circle" style="background:#e0f2f1;">💾</span>
-            Caching Layer
-          </div>
+        <div class="inner-box">
+          <div class="inner-box-title"><span class="icon">💾</span> Caching Layer</div>
           <ul>
             <li>knowledge_objects_cache.json</li>
             <li>validation_results_cache.json</li>
             <li>quality_report_cache.json</li>
-            <li>Skip LLM on restart</li>
+            <li>Skip LLM calls on restart</li>
           </ul>
         </div>
-      </div>
-      <div class="output-box">
-        <span class="icon">🎯</span>
-        <span class="label">384 Published Artifacts — Ready for Phase 2 (Test Case Generation) & Human Review</span>
+        <div class="output-pill">📦 Knowledge Artifacts<br>& Indexes (384 files)</div>
       </div>
     </div>
 
-  </div><!-- /center-column -->
+  </div><!-- /stages flex -->
 
-  <!-- ─── RIGHT PANEL ─── -->
-  <div class="right-panel">
-
-    <div class="side-panel quality-panel">
-      <h3>📊 Quality Metrics</h3>
-      <div class="metric-row">
-        <span class="metric-label">Quality Grade</span>
-        <span class="metric-value grade-a">A</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">Avg Completeness</span>
-        <span class="metric-value" style="color:#1565c0;">96%</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">Avg Confidence</span>
-        <span class="metric-value" style="color:#1565c0;">90%</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">Issues with AC</span>
-        <span class="metric-value">190 / 190</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">Issues with Links</span>
-        <span class="metric-value">160 / 190</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">🔴 Critical Issues</span>
-        <span class="metric-value grade-a">0</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">⚠️ Warnings</span>
-        <span class="metric-value grade-a">0</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">ℹ️ Info</span>
-        <span class="metric-value">194</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">Missing Priority</span>
-        <span class="metric-value" style="color:#e65100;">121</span>
-      </div>
-      <div class="metric-row">
-        <span class="metric-label">Total Files</span>
-        <span class="metric-value" style="color:#00695c;">384</span>
-      </div>
+  <!-- ─── RIGHT PANELS ─── -->
+  <div class="right-col">
+    <div class="side-panel" style="border-color:#2e7d32; background:#f5fff5;">
+      <h4 style="color:#2e7d32;">📊 Quality Metrics</h4>
+      <div class="metric-item"><span class="metric-label">Quality Grade</span><span class="metric-val grade-a">A</span></div>
+      <div class="metric-item"><span class="metric-label">Avg Completeness</span><span class="metric-val" style="color:#1565c0">96%</span></div>
+      <div class="metric-item"><span class="metric-label">Avg Confidence</span><span class="metric-val" style="color:#1565c0">90%</span></div>
+      <div class="metric-item"><span class="metric-label">Issues with AC</span><span class="metric-val">190/190</span></div>
+      <div class="metric-item"><span class="metric-label">Issues with Links</span><span class="metric-val">160/190</span></div>
+      <div class="metric-item"><span class="metric-label">🔴 Critical</span><span class="metric-val grade-a">0</span></div>
+      <div class="metric-item"><span class="metric-label">⚠️ Warnings</span><span class="metric-val grade-a">0</span></div>
+      <div class="metric-item"><span class="metric-label">ℹ️ Info</span><span class="metric-val">194</span></div>
+      <div class="metric-item"><span class="metric-label">Missing Priority</span><span class="metric-val" style="color:#e65100">121</span></div>
+      <div class="metric-item"><span class="metric-label">Total Files</span><span class="metric-val" style="color:#00695c">384</span></div>
     </div>
 
-    <div class="side-panel" style="border-color:#1565c0; background:#f5f8ff;">
-      <h3 style="color:#1565c0;">📂 Output Artifacts</h3>
+    <div class="side-panel" style="border-color:#6a1b9a; background:#fdf5ff;">
+      <h4 style="color:#6a1b9a;">🛠️ Tech Stack</h4>
       <ul>
-        <li><span class="check">✔</span> knowledge_json/ (190 files)</li>
-        <li><span class="check">✔</span> knowledge_markdown/ (190 files)</li>
-        <li><span class="check">✔</span> LMW_knowledge.json (1.1 MB)</li>
-        <li><span class="check">✔</span> LMW_summary.md</li>
-        <li><span class="check">✔</span> validation_report.md</li>
-        <li><span class="check">✔</span> relationship_graph.json</li>
+        <li>🐍 Python 3.12</li>
+        <li>🤖 CrewAI Framework</li>
+        <li>📦 Pydantic v2 Models</li>
+        <li>🔧 LiteLLM Routing</li>
+        <li>📁 UV Pkg Manager</li>
       </ul>
     </div>
 
     <div class="side-panel" style="border-color:#e65100; background:#fff8f0;">
-      <h3 style="color:#e65100;">🔄 Pydantic Models</h3>
+      <h4 style="color:#e65100;">🔄 LLM Models Used</h4>
       <ul>
-        <li>📋 NormalizedIssue</li>
-        <li>📋 StructuredIssueKnowledge</li>
-        <li>📋 ProjectKnowledge</li>
-        <li>📋 QualityReport</li>
-        <li>📋 ValidationIssue</li>
-        <li>📋 AcceptanceCriterion</li>
-        <li>📋 TraceabilityLinks</li>
-        <li>📋 Timeline</li>
-        <li>📋 Dependency</li>
+        <li>🧠 DeepSeek Chat<br><span style="font-size:8px;color:#888">&nbsp;&nbsp;&nbsp;&nbsp;(Extraction)</span></li>
+        <li>🧠 Gemini 2.0 Flash<br><span style="font-size:8px;color:#888">&nbsp;&nbsp;&nbsp;&nbsp;(Validation)</span></li>
       </ul>
     </div>
 
     <div class="side-panel" style="border-color:#00695c; background:#f0faf8;">
-      <h3 style="color:#00695c;">🚀 Phase 2 (Next)</h3>
+      <h4 style="color:#00695c;">🚀 Phase 2 (Next)</h4>
       <ul>
         <li>🧪 Test Planning Agent</li>
         <li>🧪 Test Design Agent</li>
         <li>🧪 Coverage Agent</li>
         <li>🧪 Quality Agent</li>
-        <li>🧪 Export Agent → TestRail</li>
+        <li>🧪 Export → TestRail</li>
       </ul>
     </div>
+  </div>
 
-  </div><!-- /right-panel -->
+</div><!-- /full-layout -->
 
-</div><!-- /main-grid -->
-
-<!-- ═══════════ BOTTOM: LLM SUMMARY ═══════════ -->
-<div class="bottom-bar">
-  <h3>LLM Involvement Summary</h3>
-  <div class="summary-grid">
-    <div class="summary-cell">
-      <div class="s-stage">Stage 1 · Ingestion</div>
-      <div class="s-llm"><span class="cross">✘</span> LLM Used? <strong>No</strong></div>
-      <div class="s-type">TYPE: N/A</div>
-      <div class="s-purpose">All deterministic: CSV parsing, field mapping, wiki markup cleaning</div>
-    </div>
-    <div class="summary-cell" style="border-color:#ffcc80;">
-      <div class="s-stage">Stage 2 · Extraction</div>
-      <div class="s-llm"><span class="check">✔</span> LLM Used? <strong>Yes (Selective)</strong></div>
-      <div class="s-type">TYPE: DeepSeek Chat (deepseek-chat)</div>
-      <div class="s-purpose">Semantic understanding, requirement extraction & business objective inference</div>
-    </div>
-    <div class="summary-cell">
-      <div class="s-stage">Stage 3 · Relationships</div>
-      <div class="s-llm"><span class="cross">✘</span> LLM Used? <strong>No</strong></div>
-      <div class="s-type">TYPE: N/A</div>
-      <div class="s-purpose">Deterministic: Epic hierarchy, dependency graph, component grouping</div>
-    </div>
-    <div class="summary-cell" style="border-color:#ce93d8;">
-      <div class="s-stage">Stage 4 · Validation</div>
-      <div class="s-llm"><span class="check">✔</span> LLM Used? <strong>Yes (Selective)</strong></div>
-      <div class="s-type">TYPE: Gemini 2.0 Flash</div>
-      <div class="s-purpose">Ambiguity detection, conflict identification, confidence scoring</div>
-    </div>
-    <div class="summary-cell">
-      <div class="s-stage">Stage 5 · Publisher</div>
-      <div class="s-llm"><span class="cross">✘</span> LLM Used? <strong>No</strong></div>
-      <div class="s-type">TYPE: N/A</div>
-      <div class="s-purpose">Deterministic: JSON/Markdown serialization, report generation</div>
-    </div>
+<!-- ═══ STRUCTURED KNOWLEDGE OBJECT ═══ -->
+<div class="sko-bar">
+  <h3>
+    <svg width="22" height="22" viewBox="0 0 22 22"><rect width="22" height="22" rx="4" fill="#2e7d32"/><text x="11" y="15" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Inter">{ }</text></svg>
+    4. Structured Jira Knowledge Object (KB)
+  </h3>
+  <div class="sko-fields">
+    <div class="sko-field"><span class="dot"></span> Business Objective</div>
+    <div class="sko-field"><span class="dot"></span> Scope</div>
+    <div class="sko-field"><span class="dot"></span> Functional Reqs</div>
+    <div class="sko-field"><span class="dot"></span> Non-Functional Reqs</div>
+    <div class="sko-field"><span class="dot"></span> Acceptance Criteria</div>
+    <div class="sko-field"><span class="dot"></span> Business Rules</div>
+    <div class="sko-field"><span class="dot"></span> Constraints</div>
+    <div class="sko-field"><span class="dot"></span> Risks & Assumptions</div>
+    <div class="sko-field"><span class="dot"></span> Dependencies</div>
+    <div class="sko-field"><span class="dot"></span> Decisions</div>
+    <div class="sko-field"><span class="dot"></span> Open Questions</div>
+    <div class="sko-field"><span class="dot"></span> Traceability Links</div>
+    <div class="sko-field"><span class="dot"></span> Timeline</div>
+    <div class="sko-field"><span class="dot"></span> Confidence Score</div>
+  </div>
+  <div style="margin-top:8px; display:flex; gap:20px; justify-content:center;">
+    <span style="font-size:9px; color:#555;">📄 <strong>Human Readable KB</strong> (Markdown / .md)</span>
+    <span style="font-size:9px; color:#555;">💻 <strong>Machine Readable KB</strong> (JSON)</span>
   </div>
 </div>
 
-<!-- ═══════════ LEGEND ═══════════ -->
-<div class="legend-bar">
-  <div class="legend-item">
-    <div class="legend-icon" style="background:#fff3e0; border:1px solid #ffb74d;">🤖</div>
-    LLM Involvement
+<!-- ═══ LLM INVOLVEMENT SUMMARY ═══ -->
+<div class="llm-summary-title">LLM Involvement Summary</div>
+<div class="llm-summary">
+  <div class="llm-cell">
+    <div class="cell-title">Stage 1 · Ingestion</div>
+    <div class="cell-row">LLM USED? <span class="no">✘ No</span></div>
+    <div class="cell-row">TYPE: <strong>N/A</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: All deterministic — CSV parsing, field mapping, normalization & validation</div>
   </div>
-  <div class="legend-item">
-    <div class="legend-icon" style="background:#e8f5e9; border:1px solid #81c784;">⚙️</div>
-    Rule Based / Deterministic
+  <div class="llm-cell" style="border-color:#ffcc80; background:#fffaf5;">
+    <div class="cell-title">Stage 2 · Extraction</div>
+    <div class="cell-row">LLM USED? <span class="yes">✔ Yes (Selective)</span></div>
+    <div class="cell-row">TYPE: <strong>DeepSeek Chat</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Semantic understanding, requirement extraction & summarization</div>
   </div>
-  <div class="legend-item">
-    <div class="legend-icon" style="background:#e8f5e9; border:1px solid #a5d6a7;">📦</div>
-    Output Artifact
+  <div class="llm-cell">
+    <div class="cell-title">Stage 3 · Relationships</div>
+    <div class="cell-row">LLM USED? <span class="no">✘ No</span></div>
+    <div class="cell-row">TYPE: <strong>N/A</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Deterministic graph building, hierarchy construction & clustering</div>
   </div>
-  <div class="legend-item">
-    <svg width="30" height="12"><line x1="0" y1="6" x2="30" y2="6" stroke="#1565c0" stroke-width="2" stroke-dasharray="4,2"/></svg>
-    Stage Boundary
+  <div class="llm-cell" style="border-color:#ce93d8; background:#fdf5ff;">
+    <div class="cell-title">Stage 4 · Validation</div>
+    <div class="cell-row">LLM USED? <span class="yes">✔ Yes (Selective)</span></div>
+    <div class="cell-row">TYPE: <strong>Gemini 2.0 Flash</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Deep validation, ambiguity & consistency reasoning</div>
   </div>
-  <div class="legend-item">
-    <svg width="20" height="12"><path d="M10 0 L10 8 M6 6 L10 12 L14 6" stroke="#444" stroke-width="1.5" fill="none"/></svg>
-    Data Flow
+  <div class="llm-cell">
+    <div class="cell-title">Stage 5 · Publisher</div>
+    <div class="cell-row">LLM USED? <span class="no">✘ No</span></div>
+    <div class="cell-row">TYPE: <strong>N/A</strong></div>
+    <div class="cell-row" style="font-size:8px; color:#888; margin-top:2px;">PURPOSE: Artifact generation, serialization & caching</div>
+  </div>
+  <div class="llm-cell" style="border-color:#1565c0; background:#f5f8ff;">
+    <div class="cell-title" style="color:#1565c0;">Overall LLM Strategy</div>
+    <ul style="list-style:none; font-size:8px; color:#555;">
+      <li style="padding:1px 0;">✔ Use LLM only for semantic understanding or reasoning</li>
+      <li style="padding:1px 0;">✔ Batch similar extraction tasks to reduce cost</li>
+      <li style="padding:1px 0;">✔ Rules & deterministic logic for structure & parsing</li>
+      <li style="padding:1px 0;">✔ Cache LLM outputs to disk for fast restarts</li>
+      <li style="padding:1px 0;">✔ Designed for scalability & cost efficiency</li>
+    </ul>
   </div>
 </div>
 
-<!-- ═══════════ NOTES ═══════════ -->
-<div class="notes-bar">
-  <h4>📌 NOTES</h4>
-  <ul>
-    <li>Pipeline runs offline — processes the full Jira CSV export in a single batch (no incremental sync)</li>
-    <li>LLM calls are cached to disk after completion — restarts skip expensive API calls instantly</li>
-    <li>All outputs are versioned with generation timestamps and provenance metadata</li>
-    <li>Designed for scalability — can process thousands of issues with batched LLM calls</li>
-    <li>Overall LLM Strategy: Use LLM only for semantic understanding (extraction + validation); use deterministic rules for structure, parsing & graph construction</li>
-  </ul>
+<!-- ═══ BOTTOM 3 SECTIONS ═══ -->
+<div class="bottom-sections">
+  <div class="bottom-box" style="border-color:#1565c0; background:#f5f8ff;">
+    <h4 style="color:#1565c0;">📂 Output Artifacts</h4>
+    <ul>
+      <li>📄 Structured Knowledge JSON (Machine Readable)</li>
+      <li>📝 Human Readable Knowledge Base (Markdown)</li>
+      <li>📊 Executive Summary Report (MD)</li>
+      <li>🔗 Relationship Graph (JSON)</li>
+      <li>✅ Validation Report (MD + Tables)</li>
+      <li>📋 Epic & Component Summaries</li>
+    </ul>
+  </div>
+  <div class="bottom-box" style="border-color:#e65100; background:#fff8f0;">
+    <h4 style="color:#e65100;">👥 AAVA Human Review & Approval (Manual Step)</h4>
+    <ul>
+      <li>📋 Review Knowledge Artifacts</li>
+      <li>✅ Validate Completeness & Accuracy</li>
+      <li>💬 Provide Feedback / Corrections</li>
+      <li>🚀 Approve for Downstream Use</li>
+    </ul>
+    <div style="margin-top:6px; padding:5px 8px; background:#e8f5e9; border:1px solid #a5d6a7; border-radius:4px; text-align:center;">
+      <div style="font-size:9px; font-weight:800; color:#2e7d32;">AAVA APPROVED COLLECTION</div>
+      <div style="font-size:8px; color:#555;">(Project Knowledge Base)</div>
+      <div style="display:flex; gap:8px; justify-content:center; margin-top:3px; font-size:8px;">
+        <span>✅ Versioned</span><span>✅ Searchable</span><span>✅ Traceable</span><span>✅ Reusable</span>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-box" style="border-color:#2e7d32; background:#f5fff5;">
+    <h4 style="color:#2e7d32;">🎯 Phase 1 Output Value</h4>
+    <ul class="check-list">
+      <li>Single source of truth for the project</li>
+      <li>High quality, low redundancy knowledge</li>
+      <li>Ready for Retrieval (Phase 2)</li>
+      <li>Auditable with confidence scores</li>
+      <li>Reusable across downstream workflows</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══ CROSS CUTTING CAPABILITIES ═══ -->
+<div class="cc-bar-title">6. Cross Cutting Capabilities</div>
+<div class="cross-cutting">
+  <div class="cc-cell">
+    <div class="cc-icon">🔒</div>
+    <div class="cc-title">Security & Governance</div>
+    <div class="cc-desc">API Key Management, .env isolation, Data Masking</div>
+  </div>
+  <div class="cc-cell">
+    <div class="cc-icon">📈</div>
+    <div class="cc-title">Observability & Monitoring</div>
+    <div class="cc-desc">Stage Timings, Progress Logs, Error Tracking</div>
+  </div>
+  <div class="cc-cell">
+    <div class="cc-icon">📊</div>
+    <div class="cc-title">Evaluation Framework</div>
+    <div class="cc-desc">Context Quality, Completeness Scoring, Confidence</div>
+  </div>
+  <div class="cc-cell">
+    <div class="cc-icon">💾</div>
+    <div class="cc-title">Caching Layer</div>
+    <div class="cc-desc">LLM Response Cache, Extraction Cache, Validation Cache</div>
+  </div>
+  <div class="cc-cell">
+    <div class="cc-icon">🤖</div>
+    <div class="cc-title">LLM & Model Management</div>
+    <div class="cc-desc">DeepSeek + Gemini, LiteLLM Routing, Prompt Management</div>
+  </div>
+  <div class="cc-cell">
+    <div class="cc-icon">🔄</div>
+    <div class="cc-title">CI/CD Integration</div>
+    <div class="cc-desc">Git Push, GitHub Actions, Automated Runs</div>
+  </div>
+</div>
+
+<!-- ═══ LEGEND ═══ -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-swatch" style="background:#fff3e0; border-color:#ffb74d;"></div> LLM Involvement</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#e8f5e9; border-color:#81c784;"></div> Rule Based / Deterministic</div>
+  <div class="legend-item"><div class="legend-swatch" style="background:#e8f5e9; border-color:#66bb6a;"></div> Output Artifact</div>
+  <div class="legend-item"><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="#999" stroke-width="1.5" stroke-dasharray="3,2"/></svg> Stage Boundary</div>
+  <div class="legend-item"><svg width="20" height="10"><path d="M2 5 L12 5 M10 2 L15 5 L10 8" stroke="#444" stroke-width="1.5" fill="none"/></svg> Data Flow</div>
+  <div class="legend-item">👤 Human Involvement</div>
+</div>
+
+<!-- ═══ NOTES ═══ -->
+<div style="margin-top:10px; padding:10px 14px; background:#fffde7; border:1px solid #fff9c4; border-radius:6px;">
+  <div style="font-size:10px; font-weight:800; color:#f57f17; margin-bottom:4px;">📌 NOTES</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+    <div style="font-size:9px; color:#666;">• Pipeline runs as batch offline — processes full CSV export in one pass</div>
+    <div style="font-size:9px; color:#666;">• All outputs are versioned with generation timestamps & provenance</div>
+    <div style="font-size:9px; color:#666;">• LLM calls cached to JSON — restarts skip expensive API calls instantly</div>
+    <div style="font-size:9px; color:#666;">• Designed to scale for large projects (thousands of issues)</div>
+    <div style="font-size:9px; color:#666;">• Hybrid approach: 3 of 5 stages are fully deterministic (no LLM cost)</div>
+    <div style="font-size:9px; color:#666;">• Reusable across multiple downstream workflows (test gen, reporting)</div>
+  </div>
 </div>
 
 </body>
